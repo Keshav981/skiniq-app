@@ -15,6 +15,7 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "cloudflared": "^0.7.1",
     "localtunnel": "^2.0.2",
     "nodemon": "^3.1.0"
   }
