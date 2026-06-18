@@ -576,6 +576,18 @@ app.post('/api/profile', (req, res) => {
   res.json(profile);
 });
 
+app.get('/api/profile/login', (req, res) => {
+  const { name } = req.query;
+  if (!name) {
+    return res.status(400).json({ error: 'Name is required' });
+  }
+  const profile = db.profiles.findByName(name);
+  if (!profile) {
+    return res.status(404).json({ error: 'Profile not found' });
+  }
+  res.json(profile);
+});
+
 app.get('/api/profile/:userId', (req, res) => {
   const profile = db.profiles.find(req.params.userId);
   if (!profile) return res.status(404).json({ error: 'Profile not found' });
@@ -750,6 +762,165 @@ app.delete('/api/history/:userId', (req, res) => {
   } else {
     res.status(500).json({ error: 'Failed to delete data history' });
   }
+});
+
+app.get('/admin', (req, res) => {
+  const users = db.profiles.listAll() || [];
+  const scans = db.scans.listAll() || [];
+  const clicks = db.clicks.listAll() || [];
+  const subs = db.subscriptions.listAll() || [];
+  
+  const activeSubs = subs.filter(s => s.status === 'active').length;
+  
+  const userRows = users.map(user => {
+    const userScans = scans.filter(s => s.userId === user.id);
+    const userClicks = clicks.filter(c => c.userId === user.id);
+    const userSub = subs.find(s => s.userId === user.id) || { status: 'free' };
+    
+    return `
+      <tr>
+        <td>${user.name || 'Anonymous'}</td>
+        <td style="font-family: monospace; font-size: 12px; color: #8E7C7D;">${user.id}</td>
+        <td><span class="badge badge-age">${user.ageRange || 'Unknown'}</span></td>
+        <td><span class="badge badge-type">${user.skinType || 'Not Set'}</span></td>
+        <td><span class="badge badge-sub ${userSub.status === 'active' ? 'active' : ''}">${userSub.status.toUpperCase()}</span></td>
+        <td>${userScans.length} scans</td>
+        <td>${userClicks.length} clicks</td>
+        <td>${user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</td>
+      </tr>
+    `;
+  }).join('');
+
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>SkinIQ Admin Dashboard</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #1A0F10;
+            color: #FFF;
+            margin: 0;
+            padding: 20px;
+          }
+          .container {
+            max-width: 1200px;
+            margin: 0 auto;
+          }
+          h1 {
+            color: #F2A0A1;
+            font-size: 28px;
+            margin-bottom: 20px;
+            letter-spacing: 1px;
+          }
+          .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+          }
+          .card {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(242, 160, 161, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+          }
+          .card h3 {
+            color: #8E7C7D;
+            margin: 0 0 10px 0;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+          }
+          .card .value {
+            font-size: 36px;
+            font-weight: bold;
+            color: #FCECEC;
+          }
+          .table-wrapper {
+            overflow-x: auto;
+            background-color: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            border: 1px solid rgba(242, 160, 161, 0.05);
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid rgba(242, 160, 161, 0.05);
+          }
+          th {
+            background-color: rgba(255, 255, 255, 0.04);
+            color: #F2A0A1;
+            font-weight: 600;
+          }
+          tr:hover {
+            background-color: rgba(255, 255, 255, 0.01);
+          }
+          .badge {
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+          }
+          .badge-age { background-color: rgba(242, 160, 161, 0.15); color: #F2A0A1; }
+          .badge-type { background-color: rgba(110, 158, 128, 0.15); color: #6E9E80; }
+          .badge-sub { background-color: rgba(255, 255, 255, 0.1); color: #FFF; }
+          .badge-sub.active { background-color: rgba(212, 175, 55, 0.2); color: #D4AF37; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>SkinIQ Admin Dashboard</h1>
+          
+          <div class="stats">
+            <div class="card">
+              <h3>Total Registered Users</h3>
+              <div class="value">${users.length}</div>
+            </div>
+            <div class="card">
+              <h3>Total Dermal Scans</h3>
+              <div class="value">${scans.length}</div>
+            </div>
+            <div class="card">
+              <h3>Active Premium Subscriptions</h3>
+              <div class="value">${activeSubs}</div>
+            </div>
+            <div class="card">
+              <h3>Affiliate Product Clicks</h3>
+              <div class="value">${clicks.length}</div>
+            </div>
+          </div>
+          
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>User ID</th>
+                  <th>Age Group</th>
+                  <th>Skin Type</th>
+                  <th>Subscription</th>
+                  <th>Scans</th>
+                  <th>Clicks</th>
+                  <th>Registration Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${userRows || '<tr><td colspan="8" style="text-align: center; color: #8E7C7D;">No users registered yet.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
 });
 
 // Start backend
