@@ -1,0 +1,15 @@
+# Ignore local scratch / dev directories
+scratch/
+*.log
+
+# Ignore client build and module files
+skiniq-app/node_modules/
+skiniq-app/.expo/
+skiniq-app/dist/
+skiniq-app/web-build/
+skiniq-app/expo-env.d.ts
+
+# Ignore backend module and secrets files
+skiniq-backend/node_modules/
+skiniq-backend/.env
+skiniq-backend/database.json
