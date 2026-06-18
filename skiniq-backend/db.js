@@ -57,6 +57,14 @@ const db = {
       const data = readDb();
       return data.profiles.find(p => p.id === userId) || null;
     },
+    findByName: (name) => {
+      const data = readDb();
+      return data.profiles.find(p => p.name && p.name.trim().toLowerCase() === name.trim().toLowerCase()) || null;
+    },
+    listAll: () => {
+      const data = readDb();
+      return data.profiles;
+    },
     save: (profile) => {
       const data = readDb();
       const idx = data.profiles.findIndex(p => p.id === profile.id);
@@ -73,6 +81,10 @@ const db = {
   },
   
   scans: {
+    listAll: () => {
+      const data = readDb();
+      return data.scans;
+    },
     findByUser: (userId) => {
       const data = readDb();
       return data.scans
@@ -138,6 +150,10 @@ const db = {
   },
 
   clicks: {
+    listAll: () => {
+      const data = readDb();
+      return data.clicks;
+    },
     log: (userId, productId, scanId) => {
       const data = readDb();
       const clickEntry = {
@@ -158,6 +174,10 @@ const db = {
   },
 
   subscriptions: {
+    listAll: () => {
+      const data = readDb();
+      return data.subscriptions;
+    },
     find: (userId) => {
       const data = readDb();
       return data.subscriptions.find(s => s.userId === userId) || {
