@@ -1,217 +1,423 @@
+const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
-const { v4: uuidv4 } = require('uuid');
+const dotenv = require('dotenv');
 
-const DB_PATH = path.join(__dirname, 'database.json');
-const PRODUCTS_PATH = path.join(__dirname, 'products.json');
+dotenv.config();
 
-// Initialize database file if it doesn't exist
-function initDb() {
-  if (!fs.existsSync(DB_PATH)) {
-    const defaultData = {
-      profiles: [],
-      scans: [],
-      clicks: [],
-      subscriptions: []
-    };
-    fs.writeFileSync(DB_PATH, JSON.stringify(defaultData, null, 2), 'utf8');
-  }
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('[SkinIQ] ERROR: Supabase URL and Key must be configured in environment variables.');
 }
 
-// Read database contents
-function readDb() {
-  initDb();
-  try {
-    const content = fs.readFileSync(DB_PATH, 'utf8');
-    return JSON.parse(content);
-  } catch (err) {
-    console.error('Error reading JSON database:', err);
-    return { profiles: [], scans: [], clicks: [], subscriptions: [] };
-  }
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Helper to map DB profile row (snake_case) to client profile type (camelCase)
+function mapProfile(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    ageRange: row.age_range,
+    skinType: row.skin_type,
+    skinGoals: row.skin_goals || [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
 }
 
-// Write database contents
-function writeDb(data) {
-  try {
-    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
-  } catch (err) {
-    console.error('Error writing JSON database:', err);
-  }
+// Helper to map DB scan row to client scan type
+function mapScan(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    imageUrl: row.image_url,
+    imageRetained: row.image_retained,
+    scores: row.scores,
+    explanations: row.explanations,
+    general_summary: row.general_summary,
+    createdAt: row.created_at,
+    detections: row.detections || [],
+    recommended_products: row.recommended_products || [],
+    isFrontFacing: row.is_front_facing || false
+  };
 }
 
-// Load products
-function getProducts() {
+// Initialize database by pre-populating products if empty
+async function initDatabase() {
   try {
-    if (fs.existsSync(PRODUCTS_PATH)) {
-      return JSON.parse(fs.readFileSync(PRODUCTS_PATH, 'utf8'));
+    const { data: existingProducts, error } = await supabase
+      .from('products')
+      .select('id')
+      .limit(1);
+
+    if (error) {
+      console.warn('[SkinIQ] Error checking products table in Supabase:', error.message);
+      return;
+    }
+
+    if (!existingProducts || existingProducts.length === 0) {
+      console.log('[SkinIQ] Supabase products table is empty. Pre-populating from products.json...');
+      const productsPath = path.join(__dirname, 'products.json');
+      if (fs.existsSync(productsPath)) {
+        const productsData = JSON.parse(fs.readFileSync(productsPath, 'utf8'));
+        
+        // Map products.json dimensions to DB schema structure
+        const formattedProducts = productsData.map(p => ({
+          id: p.id,
+          name: p.name,
+          brand: p.brand,
+          category: p.category,
+          price_inr: p.price_inr,
+          affiliate_link: p.affiliate_link,
+          reason_text: p.reason_text,
+          dimensions: p.dimensions,
+          image_url: p.image_url
+        }));
+
+        const { error: insertError } = await supabase
+          .from('products')
+          .insert(formattedProducts);
+
+        if (insertError) {
+          console.error('[SkinIQ] Error seeding products to Supabase:', insertError.message);
+        } else {
+          console.log('[SkinIQ] Successfully pre-populated products in Supabase!');
+        }
+      }
     }
   } catch (err) {
-    console.error('Error reading products catalog:', err);
+    console.error('[SkinIQ] Failed to initialize database seeding:', err);
   }
-  return [];
 }
+
+// Start async initialization in background
+initDatabase();
 
 const db = {
   profiles: {
-    find: (userId) => {
-      const data = readDb();
-      return data.profiles.find(p => p.id === userId) || null;
-    },
-    findByName: (name) => {
-      const data = readDb();
-      return data.profiles.find(p => p.name && p.name.trim().toLowerCase() === name.trim().toLowerCase()) || null;
-    },
-    listAll: () => {
-      const data = readDb();
-      return data.profiles;
-    },
-    save: (profile) => {
-      const data = readDb();
-      const idx = data.profiles.findIndex(p => p.id === profile.id);
-      if (idx !== -1) {
-        data.profiles[idx] = { ...data.profiles[idx], ...profile, updatedAt: new Date().toISOString() };
-      } else {
-        const id = profile.id || uuidv4();
-        profile = { id, ...profile, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-        data.profiles.push(profile);
+    find: async (userId) => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+        
+      if (error) {
+        if (error.code !== 'PGRST116') { // PGRST116: 0 rows returned
+          console.error('[SkinIQ] Supabase profile find error:', error.message);
+        }
+        return null;
       }
-      writeDb(data);
-      return profile;
+      return mapProfile(data);
+    },
+    
+    findByName: async (name) => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('name', name.trim())
+        .limit(1);
+        
+      if (error) {
+        console.error('[SkinIQ] Supabase profile findByName error:', error.message);
+        return null;
+      }
+      return data && data.length > 0 ? mapProfile(data[0]) : null;
+    },
+    
+    listAll: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        console.error('[SkinIQ] Supabase profiles listAll error:', error.message);
+        return [];
+      }
+      return data.map(mapProfile);
+    },
+    
+    save: async (profile) => {
+      const payload = {
+        id: profile.id,
+        name: profile.name,
+        age_range: profile.ageRange,
+        skin_type: profile.skinType || null,
+        skin_goals: profile.skinGoals || [],
+        updated_at: new Date().toISOString()
+      };
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert(payload)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('[SkinIQ] Supabase profile save error:', error.message);
+        throw error;
+      }
+      return mapProfile(data);
     }
   },
   
   scans: {
-    listAll: () => {
-      const data = readDb();
-      return data.scans;
+    listAll: async () => {
+      const { data, error } = await supabase
+        .from('scans')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        console.error('[SkinIQ] Supabase scans listAll error:', error.message);
+        return [];
+      }
+      return data.map(mapScan);
     },
-    findByUser: (userId) => {
-      const data = readDb();
-      return data.scans
-        .filter(s => s.userId === userId)
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    findByUser: async (userId) => {
+      const { data, error } = await supabase
+        .from('scans')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        console.error('[SkinIQ] Supabase scans findByUser error:', error.message);
+        return [];
+      }
+      return data.map(mapScan);
     },
-    find: (scanId) => {
-      const data = readDb();
-      return data.scans.find(s => s.id === scanId) || null;
+    
+    find: async (scanId) => {
+      const { data, error } = await supabase
+        .from('scans')
+        .select('*')
+        .eq('id', scanId)
+        .single();
+        
+      if (error) {
+        console.error('[SkinIQ] Supabase scan find error:', error.message);
+        return null;
+      }
+      return mapScan(data);
     },
-    create: (scanData) => {
-      const data = readDb();
-      const newScan = {
-        id: uuidv4(),
-        ...scanData,
-        createdAt: new Date().toISOString()
+    
+    create: async (scanData) => {
+      const payload = {
+        user_id: scanData.userId,
+        image_url: scanData.imageUrl || null,
+        image_retained: !!scanData.imageRetained,
+        scores: scanData.scores,
+        explanations: scanData.explanations,
+        general_summary: scanData.general_summary,
+        detections: scanData.detections || [],
+        recommended_products: scanData.recommended_products || [],
+        is_front_facing: !!scanData.isFrontFacing
       };
-      data.scans.push(newScan);
-      writeDb(data);
-      return newScan;
+      
+      const { data, error } = await supabase
+        .from('scans')
+        .insert(payload)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('[SkinIQ] Supabase scan create error:', error.message);
+        throw error;
+      }
+      return mapScan(data);
     },
-    deleteUserHistory: (userId) => {
-      const data = readDb();
-      data.scans = data.scans.filter(s => s.userId !== userId);
-      data.clicks = data.clicks.filter(c => c.userId !== userId);
-      
-      // Also reset profile skin metrics if stored
-      const profileIdx = data.profiles.findIndex(p => p.id === userId);
-      if (profileIdx !== -1) {
-        data.profiles[profileIdx].skinGoals = [];
-        data.profiles[profileIdx].skinType = null;
+    
+    deleteUserHistory: async (userId) => {
+      const { error: scansErr } = await supabase
+        .from('scans')
+        .delete()
+        .eq('user_id', userId);
+        
+      const { error: clicksErr } = await supabase
+        .from('clicks')
+        .delete()
+        .eq('user_id', userId);
+        
+      const { error: profErr } = await supabase
+        .from('profiles')
+        .update({ skin_goals: [], skin_type: null })
+        .eq('id', userId);
+        
+      const { error: subErr } = await supabase
+        .from('subscriptions')
+        .update({ status: 'free', tier: null, expires_at: null })
+        .eq('user_id', userId);
+        
+      if (scansErr || clicksErr || profErr || subErr) {
+        console.error('[SkinIQ] Supabase deleteUserHistory error:', scansErr || clicksErr || profErr || subErr);
+        return false;
       }
-      
-      // Reset subscription to free
-      const subIdx = data.subscriptions.findIndex(s => s.userId === userId);
-      if (subIdx !== -1) {
-        data.subscriptions[subIdx] = {
-          userId,
-          status: 'free',
-          tier: null,
-          expiresAt: null,
-          updatedAt: new Date().toISOString()
-        };
-      }
-      
-      writeDb(data);
       return true;
     }
   },
-
+  
   products: {
-    list: () => {
-      return getProducts();
+    list: async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: true });
+        
+      if (error) {
+        console.error('[SkinIQ] Supabase products list error:', error.message);
+        return [];
+      }
+      
+      return data;
     },
-    recommend: (lowestDimensions) => {
-      const allProducts = getProducts();
-      const matched = allProducts.filter(prod => 
+    
+    recommend: async (lowestDimensions) => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*');
+        
+      if (error) {
+        console.error('[SkinIQ] Supabase products recommend error:', error.message);
+        return [];
+      }
+      
+      const matched = data.filter(prod => 
         prod.dimensions.some(dim => lowestDimensions.includes(dim))
       );
-      // Shuffle matches to guarantee a diverse selection of brands (prevent single brand bias)
+      
       return matched.sort(() => 0.5 - Math.random()).slice(0, 3);
     }
   },
-
+  
   clicks: {
-    listAll: () => {
-      const data = readDb();
-      return data.clicks;
+    listAll: async () => {
+      const { data, error } = await supabase
+        .from('clicks')
+        .select('*')
+        .order('clicked_at', { ascending: false });
+        
+      if (error) {
+        console.error('[SkinIQ] Supabase clicks listAll error:', error.message);
+        return [];
+      }
+      
+      return data.map(row => ({
+        id: row.id,
+        userId: row.user_id,
+        productId: row.product_id,
+        scanId: row.scan_id,
+        clickedAt: row.clicked_at
+      }));
     },
-    log: (userId, productId, scanId) => {
-      const data = readDb();
-      const clickEntry = {
-        id: uuidv4(),
-        userId,
-        productId,
-        scanId: scanId || null,
-        clickedAt: new Date().toISOString()
+    
+    log: async (userId, productId, scanId) => {
+      const payload = {
+        user_id: userId,
+        product_id: productId,
+        scan_id: scanId || null
       };
-      data.clicks.push(clickEntry);
-      writeDb(data);
-      return clickEntry;
-    },
-    getClicks: (userId) => {
-      const data = readDb();
-      return data.clicks.filter(c => c.userId === userId);
+      
+      const { data, error } = await supabase
+        .from('clicks')
+        .insert(payload)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('[SkinIQ] Supabase clicks log error:', error.message);
+        throw error;
+      }
+      
+      return {
+        id: data.id,
+        userId: data.user_id,
+        productId: data.product_id,
+        scanId: data.scan_id,
+        clickedAt: data.clicked_at
+      };
     }
   },
-
+  
   subscriptions: {
-    listAll: () => {
-      const data = readDb();
-      return data.subscriptions;
+    listAll: async () => {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .order('updated_at', { ascending: false });
+        
+      if (error) {
+        console.error('[SkinIQ] Supabase subscriptions listAll error:', error.message);
+        return [];
+      }
+      
+      return data.map(row => ({
+        userId: row.user_id,
+        status: row.status,
+        tier: row.tier,
+        expiresAt: row.expires_at
+      }));
     },
-    find: (userId) => {
-      const data = readDb();
-      return data.subscriptions.find(s => s.userId === userId) || {
-        userId,
-        status: 'free',
-        tier: null,
-        expiresAt: null
+    
+    find: async (userId) => {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+        
+      if (error) {
+        if (error.code !== 'PGRST116') {
+          console.error('[SkinIQ] Supabase subscription find error:', error.message);
+        }
+        return {
+          userId,
+          status: 'free',
+          tier: null,
+          expiresAt: null
+        };
+      }
+      
+      return {
+        userId: data.user_id,
+        status: data.status,
+        tier: data.tier,
+        expiresAt: data.expires_at
       };
     },
-    save: (userId, subData) => {
-      const data = readDb();
-      const idx = data.subscriptions.findIndex(s => s.userId === userId);
-      const entry = {
-        userId,
+    
+    save: async (userId, subData) => {
+      const payload = {
+        user_id: userId,
         status: subData.status || 'free',
         tier: subData.tier || null,
-        expiresAt: subData.expiresAt || null,
-        updatedAt: new Date().toISOString()
+        expires_at: subData.expiresAt || null,
+        updated_at: new Date().toISOString()
       };
       
-      if (idx !== -1) {
-        data.subscriptions[idx] = entry;
-      } else {
-        data.subscriptions.push(entry);
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .upsert(payload)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('[SkinIQ] Supabase subscription save error:', error.message);
+        throw error;
       }
       
-      // Update main profile status for easier access
-      const profileIdx = data.profiles.findIndex(p => p.id === userId);
-      if (profileIdx !== -1) {
-        data.profiles[profileIdx].subscriptionStatus = entry.status;
-      }
-      
-      writeDb(data);
-      return entry;
+      return {
+        userId: data.user_id,
+        status: data.status,
+        tier: data.tier,
+        expiresAt: data.expires_at
+      };
     }
   }
 };
