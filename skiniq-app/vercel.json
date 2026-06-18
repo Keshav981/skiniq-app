@@ -1,0 +1,9 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/((?!assets/|_expo/|favicon.ico|+not-found.html|_sitemap.html).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
