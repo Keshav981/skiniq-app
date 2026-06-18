@@ -4,7 +4,7 @@ const localtunnel = require('localtunnel');
   try {
     const tunnel = await localtunnel({ 
       port: 3000, 
-      subdomain: 'skiniq-prod-2026-backend' 
+      subdomain: 'skiniq-api-2026-prod' 
     });
 
     console.log('Localtunnel active at:', tunnel.url);
