@@ -71,6 +71,7 @@ export default function AppIndex() {
     backendUrl,
     setBackendUrl,
     saveProfile,
+    loginUser,
     submitPhotoForAnalysis,
     setCurrentScan,
     trackProductClick,
@@ -83,11 +84,25 @@ export default function AppIndex() {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<'camera' | 'insights' | 'journey' | 'products' | 'profile'>('camera');
   
-  // Onboarding Wizard states
+  // Onboarding & Login states
+  const [onboardMode, setOnboardMode] = useState<'login' | 'register'>('login');
+  const [loginNameInput, setLoginNameInput] = useState('');
   const [onboardName, setOnboardName] = useState('');
   const [onboardAge, setOnboardAge] = useState('25-34');
   const [onboardSkinType, setOnboardSkinType] = useState<string | null>('combination');
   const [onboardGoals, setOnboardGoals] = useState<string[]>(['hydration', 'general_health']);
+
+  const handleLogin = async () => {
+    if (!loginNameInput.trim()) {
+      Alert.alert('Name Required', 'Please enter your registered name to sign in.');
+      return;
+    }
+    try {
+      await loginUser(loginNameInput.trim());
+    } catch (err: any) {
+      Alert.alert('Login Failed', err.message || 'An error occurred during sign in.');
+    }
+  };
   
   // Camera & Photo uploads
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -514,67 +529,106 @@ export default function AppIndex() {
           </View>
 
           <BlurView intensity={75} tint="light" style={styles.onboardCard}>
-            <Text style={styles.sectionHeader}>Tell us about yourself</Text>
-            
-            <Text style={styles.inputLabel}>Name</Text>
-            <TextInput
-              style={styles.textInput}
-              value={onboardName}
-              onChangeText={setOnboardName}
-              placeholder="Enter your name"
-              placeholderTextColor={COLORS.textMuted}
-            />
- 
-            <Text style={styles.inputLabel}>Age Group</Text>
-            <View style={styles.chipRow}>
-              {['18-24', '25-34', '35-44', '45+'].map(age => (
-                <TouchableOpacity
-                  key={age}
-                  style={[styles.chip, onboardAge === age && styles.chipActive]}
-                  onPress={() => setOnboardAge(age)}
-                >
-                  <Text style={[styles.chipText, onboardAge === age && styles.chipTextActive]}>{age}</Text>
-                </TouchableOpacity>
-              ))}
+            {/* Elegant glassmorphic authentication tabs */}
+            <View style={styles.authTabsRow}>
+              <TouchableOpacity
+                style={[styles.authTab, onboardMode === 'login' && styles.authTabActive]}
+                onPress={() => setOnboardMode('login')}
+              >
+                <Text style={[styles.authTabText, onboardMode === 'login' && styles.authTabActiveText]}>Sign In</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.authTab, onboardMode === 'register' && styles.authTabActive]}
+                onPress={() => setOnboardMode('register')}
+              >
+                <Text style={[styles.authTabText, onboardMode === 'register' && styles.authTabActiveText]}>New Profile</Text>
+              </TouchableOpacity>
             </View>
- 
-            <Text style={styles.inputLabel}>Skin Type Self-Assessment (Optional)</Text>
-            <View style={styles.chipRow}>
-              {[
-                { id: 'dry', label: 'Dry' },
-                { id: 'oily', label: 'Oily' },
-                { id: 'combination', label: 'Combination' },
-                { id: 'sensitive', label: 'Sensitive' }
-              ].map(type => (
-                <TouchableOpacity
-                  key={type.id}
-                  style={[styles.chip, onboardSkinType === type.id && styles.chipActive]}
-                  onPress={() => setOnboardSkinType(type.id)}
-                >
-                  <Text style={[styles.chipText, onboardSkinType === type.id && styles.chipTextActive]}>{type.label}</Text>
+
+            {onboardMode === 'login' ? (
+              <View>
+                <Text style={styles.sectionHeader}>Welcome Back</Text>
+                
+                <Text style={styles.inputLabel}>Registered Name</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={loginNameInput}
+                  onChangeText={setLoginNameInput}
+                  placeholder="Enter your name to sign in"
+                  placeholderTextColor={COLORS.textMuted}
+                  autoCapitalize="words"
+                />
+
+                <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
+                  <Text style={styles.primaryButtonText}>Sign In</Text>
                 </TouchableOpacity>
-              ))}
-            </View>
- 
-            <Text style={styles.inputLabel}>Skin Goals (Select Multiples)</Text>
-            {goalsList.map(goal => {
-              const selected = onboardGoals.includes(goal.id);
-              return (
-                <TouchableOpacity
-                  key={goal.id}
-                  style={[styles.goalSelectCard, selected && styles.goalSelectCardActive]}
-                  onPress={() => toggleGoal(goal.id)}
-                >
-                  <Text style={goal.id === 'hydration' ? styles.goalSelectIcon : { fontSize: 20, marginRight: 12 }}>{goal.icon}</Text>
-                  <Text style={[styles.goalSelectLabel, selected && styles.goalSelectLabelActive]}>{goal.label}</Text>
-                  <View style={[styles.checkbox, selected && styles.checkboxChecked]} />
+              </View>
+            ) : (
+              <View>
+                <Text style={styles.sectionHeader}>Tell us about yourself</Text>
+                
+                <Text style={styles.inputLabel}>Name</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={onboardName}
+                  onChangeText={setOnboardName}
+                  placeholder="Enter your name"
+                  placeholderTextColor={COLORS.textMuted}
+                  autoCapitalize="words"
+                />
+      
+                <Text style={styles.inputLabel}>Age Group</Text>
+                <View style={styles.chipRow}>
+                  {['18-24', '25-34', '35-44', '45+'].map(age => (
+                    <TouchableOpacity
+                      key={age}
+                      style={[styles.chip, onboardAge === age && styles.chipActive]}
+                      onPress={() => setOnboardAge(age)}
+                    >
+                      <Text style={[styles.chipText, onboardAge === age && styles.chipTextActive]}>{age}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+      
+                <Text style={styles.inputLabel}>Skin Type Self-Assessment (Optional)</Text>
+                <View style={styles.chipRow}>
+                  {[
+                    { id: 'dry', label: 'Dry' },
+                    { id: 'oily', label: 'Oily' },
+                    { id: 'combination', label: 'Combination' },
+                    { id: 'sensitive', label: 'Sensitive' }
+                  ].map(type => (
+                    <TouchableOpacity
+                      key={type.id}
+                      style={[styles.chip, onboardSkinType === type.id && styles.chipActive]}
+                      onPress={() => setOnboardSkinType(type.id)}
+                    >
+                      <Text style={[styles.chipText, onboardSkinType === type.id && styles.chipTextActive]}>{type.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+      
+                <Text style={styles.inputLabel}>Skin Goals (Select Multiples)</Text>
+                {goalsList.map(goal => {
+                  const selected = onboardGoals.includes(goal.id);
+                  return (
+                    <TouchableOpacity
+                      key={goal.id}
+                      style={[styles.goalSelectCard, selected && styles.goalSelectCardActive]}
+                      onPress={() => toggleGoal(goal.id)}
+                    >
+                      <Text style={goal.id === 'hydration' ? styles.goalSelectIcon : { fontSize: 20, marginRight: 12 }}>{goal.icon}</Text>
+                      <Text style={[styles.goalSelectLabel, selected && styles.goalSelectLabelActive]}>{goal.label}</Text>
+                      <View style={[styles.checkbox, selected && styles.checkboxChecked]} />
+                    </TouchableOpacity>
+                  );
+                })}
+      
+                <TouchableOpacity style={styles.primaryButton} onPress={handleStartOnboarding}>
+                  <Text style={styles.primaryButtonText}>Continue to Skin Check</Text>
                 </TouchableOpacity>
-              );
-            })}
- 
-            <TouchableOpacity style={styles.primaryButton} onPress={handleStartOnboarding}>
-              <Text style={styles.primaryButtonText}>Continue to Skin Check</Text>
-            </TouchableOpacity>
+              </View>
+            )}
           </BlurView>
         </ScrollView>
       </SafeAreaView>
@@ -3011,5 +3065,34 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     textAlign: 'center',
     lineHeight: 16
+  },
+  authTabsRow: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+    borderRadius: 14,
+    padding: 4
+  },
+  authTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10
+  },
+  authTabActive: {
+    backgroundColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 1
+  },
+  authTabText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: COLORS.textMuted
+  },
+  authTabActiveText: {
+    color: COLORS.roseDark
   }
 });
