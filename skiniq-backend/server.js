@@ -567,31 +567,43 @@ function generateMockAnalysis(userContext) {
 // ----------------------------------------------------
 
 // 1. Profile Endpoints
-app.post('/api/profile', (req, res) => {
+app.post('/api/profile', async (req, res) => {
   const { id, name, ageRange, skinType, skinGoals } = req.body;
   if (!name || !ageRange) {
     return res.status(400).json({ error: 'Name and age range are required' });
   }
-  const profile = db.profiles.save({ id, name, ageRange, skinType, skinGoals });
-  res.json(profile);
+  try {
+    const profile = await db.profiles.save({ id, name, ageRange, skinType, skinGoals });
+    res.json(profile);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save profile' });
+  }
 });
 
-app.get('/api/profile/login', (req, res) => {
+app.get('/api/profile/login', async (req, res) => {
   const { name } = req.query;
   if (!name) {
     return res.status(400).json({ error: 'Name is required' });
   }
-  const profile = db.profiles.findByName(name);
-  if (!profile) {
-    return res.status(404).json({ error: 'Profile not found' });
+  try {
+    const profile = await db.profiles.findByName(name);
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+    res.json(profile);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to login user' });
   }
-  res.json(profile);
 });
 
-app.get('/api/profile/:userId', (req, res) => {
-  const profile = db.profiles.find(req.params.userId);
-  if (!profile) return res.status(404).json({ error: 'Profile not found' });
-  res.json(profile);
+app.get('/api/profile/:userId', async (req, res) => {
+  try {
+    const profile = await db.profiles.find(req.params.userId);
+    if (!profile) return res.status(404).json({ error: 'Profile not found' });
+    res.json(profile);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
 });
 
 // 2. Scan & Analysis Endpoints
@@ -601,33 +613,33 @@ app.post('/api/scans', async (req, res) => {
     return res.status(400).json({ error: 'UserId and image are required' });
   }
 
-  const profile = db.profiles.find(userId);
-  if (!profile) return res.status(404).json({ error: 'User profile not found' });
-
-  // Check subscription access: first scan is free, others require active subscription
-  const scans = db.scans.findByUser(userId);
-  const subscription = db.subscriptions.find(userId);
-  
-  if (scans.length >= 1 && subscription.status !== 'active') {
-    return res.status(403).json({ 
-      error: 'Subscription required',
-      paywallRequired: true,
-      message: 'Subscribe to unlock unlimited scans and track your skin journey.'
-    });
-  }
-
-  // Gather context from previous scans
-  const previousScan = scans[0];
-  const userContext = {
-    ageRange: profile.ageRange,
-    skinType: profile.skinType,
-    skinGoals: profile.skinGoals,
-    previousScanScores: previousScan ? previousScan.scores : null
-  };
-
   try {
+    const profile = await db.profiles.find(userId);
+    if (!profile) return res.status(404).json({ error: 'User profile not found' });
+
+    // Check subscription access: first scan is free, others require active subscription
+    const scans = await db.scans.findByUser(userId);
+    const subscription = await db.subscriptions.find(userId);
+    
+    if (scans.length >= 1 && subscription.status !== 'active') {
+      return res.status(403).json({ 
+        error: 'Subscription required',
+        paywallRequired: true,
+        message: 'Subscribe to unlock unlimited scans and track your skin journey.'
+      });
+    }
+
+    // Gather context from previous scans
+    const previousScan = scans[0];
+    const userContext = {
+      ageRange: profile.ageRange,
+      skinType: profile.skinType,
+      skinGoals: profile.skinGoals,
+      previousScanScores: previousScan ? previousScan.scores : null
+    };
+
     let analysis;
-    const productsCatalog = db.products.list();
+    const productsCatalog = await db.products.list();
     if (process.env.GEMINI_API_KEY) {
       console.log('Running Gemini skin analysis...');
       const catalogString = productsCatalog.map(p => `- ID: ${p.id}, Brand: ${p.brand}, Name: ${p.name}, Category: ${p.category}, Target: ${p.dimensions.join(', ')}`).join('\n');
@@ -670,11 +682,11 @@ app.post('/api/scans', async (req, res) => {
         return valA - valB;
       });
       const lowestDims = sortedDims.slice(0, 3);
-      finalRecommendations = db.products.recommend(lowestDims);
+      finalRecommendations = await db.products.recommend(lowestDims);
     }
     
-    // Save to simulated database
-    const scanRecord = db.scans.create({
+    // Save to database
+    const scanRecord = await db.scans.create({
       userId,
       scores: analysis.scores,
       explanations: analysis.explanations,
@@ -694,233 +706,269 @@ app.post('/api/scans', async (req, res) => {
   }
 });
 
-app.get('/api/scans/:userId', (req, res) => {
-  const scans = db.scans.findByUser(req.params.userId);
-  res.json(scans);
+app.get('/api/scans/:userId', async (req, res) => {
+  try {
+    const scans = await db.scans.findByUser(req.params.userId);
+    res.json(scans);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user history' });
+  }
 });
 
-app.get('/api/scans/detail/:scanId', (req, res) => {
-  const scan = db.scans.find(req.params.scanId);
-  if (!scan) return res.status(404).json({ error: 'Scan not found' });
-  res.json(scan);
+app.get('/api/scans/detail/:scanId', async (req, res) => {
+  try {
+    const scan = await db.scans.find(req.params.scanId);
+    if (!scan) return res.status(404).json({ error: 'Scan not found' });
+    res.json(scan);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch scan details' });
+  }
 });
 
 // 3. Product Recommendation Endpoints
-app.get('/api/products', (req, res) => {
+app.get('/api/products', async (req, res) => {
   const { dimensions } = req.query;
-  const products = db.products.list();
-  
-  if (dimensions) {
-    const dimsArray = dimensions.split(',');
-    const filtered = products.filter(prod => 
-      prod.dimensions.some(d => dimsArray.includes(d))
-    );
-    return res.json(filtered);
+  try {
+    const products = await db.products.list();
+    
+    if (dimensions) {
+      const dimsArray = dimensions.split(',');
+      const filtered = products.filter(prod => 
+        prod.dimensions.some(d => dimsArray.includes(d))
+      );
+      return res.json(filtered);
+    }
+    
+    res.json(products);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch products catalog' });
   }
-  
-  res.json(products);
 });
 
-app.post('/api/products/recommend', (req, res) => {
+app.post('/api/products/recommend', async (req, res) => {
   const { lowestDimensions } = req.body;
   if (!lowestDimensions || !Array.isArray(lowestDimensions)) {
     return res.status(400).json({ error: 'lowestDimensions array required' });
   }
-  const recommended = db.products.recommend(lowestDimensions);
-  res.json(recommended);
+  try {
+    const recommended = await db.products.recommend(lowestDimensions);
+    res.json(recommended);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to recommend products' });
+  }
 });
 
-app.post('/api/clicks', (req, res) => {
+app.post('/api/clicks', async (req, res) => {
   const { userId, productId, scanId } = req.body;
   if (!userId || !productId) {
     return res.status(400).json({ error: 'userId and productId are required' });
   }
-  const click = db.clicks.log(userId, productId, scanId);
-  res.json(click);
+  try {
+    const click = await db.clicks.log(userId, productId, scanId);
+    res.json(click);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to log product click' });
+  }
 });
 
 // 4. Subscription Endpoints
-app.get('/api/subscription/:userId', (req, res) => {
-  const sub = db.subscriptions.find(req.params.userId);
-  res.json(sub);
+app.get('/api/subscription/:userId', async (req, res) => {
+  try {
+    const sub = await db.subscriptions.find(req.params.userId);
+    res.json(sub);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch subscription' });
+  }
 });
 
-app.post('/api/subscription', (req, res) => {
+app.post('/api/subscription', async (req, res) => {
   const { userId, status, tier, expiresAt } = req.body;
   if (!userId || !status) {
     return res.status(400).json({ error: 'userId and status are required' });
   }
-  const sub = db.subscriptions.save(userId, { status, tier, expiresAt });
-  res.json(sub);
-});
-
-// 5. Data Privacy Deletion Endpoint
-app.delete('/api/history/:userId', (req, res) => {
-  const deleted = db.scans.deleteUserHistory(req.params.userId);
-  if (deleted) {
-    res.json({ success: true, message: 'All personal data, image logs, and scan history have been deleted successfully.' });
-  } else {
-    res.status(500).json({ error: 'Failed to delete data history' });
+  try {
+    const sub = await db.subscriptions.save(userId, { status, tier, expiresAt });
+    res.json(sub);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update subscription' });
   }
 });
 
-app.get('/admin', (req, res) => {
-  const users = db.profiles.listAll() || [];
-  const scans = db.scans.listAll() || [];
-  const clicks = db.clicks.listAll() || [];
-  const subs = db.subscriptions.listAll() || [];
-  
-  const activeSubs = subs.filter(s => s.status === 'active').length;
-  
-  const userRows = users.map(user => {
-    const userScans = scans.filter(s => s.userId === user.id);
-    const userClicks = clicks.filter(c => c.userId === user.id);
-    const userSub = subs.find(s => s.userId === user.id) || { status: 'free' };
-    
-    return `
-      <tr>
-        <td>${user.name || 'Anonymous'}</td>
-        <td style="font-family: monospace; font-size: 12px; color: #8E7C7D;">${user.id}</td>
-        <td><span class="badge badge-age">${user.ageRange || 'Unknown'}</span></td>
-        <td><span class="badge badge-type">${user.skinType || 'Not Set'}</span></td>
-        <td><span class="badge badge-sub ${userSub.status === 'active' ? 'active' : ''}">${userSub.status.toUpperCase()}</span></td>
-        <td>${userScans.length} scans</td>
-        <td>${userClicks.length} clicks</td>
-        <td>${user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</td>
-      </tr>
-    `;
-  }).join('');
+// 5. Data Privacy Deletion Endpoint
+app.delete('/api/history/:userId', async (req, res) => {
+  try {
+    const deleted = await db.scans.deleteUserHistory(req.params.userId);
+    if (deleted) {
+      res.json({ success: true, message: 'All personal data, image logs, and scan history have been deleted successfully.' });
+    } else {
+      res.status(500).json({ error: 'Failed to delete data history' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: 'Server error during history deletion' });
+  }
+});
 
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>SkinIQ Admin Dashboard</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #1A0F10;
-            color: #FFF;
-            margin: 0;
-            padding: 20px;
-          }
-          .container {
-            max-width: 1200px;
-            margin: 0 auto;
-          }
-          h1 {
-            color: #F2A0A1;
-            font-size: 28px;
-            margin-bottom: 20px;
-            letter-spacing: 1px;
-          }
-          .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-          }
-          .card {
-            background-color: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(242, 160, 161, 0.1);
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-          }
-          .card h3 {
-            color: #8E7C7D;
-            margin: 0 0 10px 0;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-          }
-          .card .value {
-            font-size: 36px;
-            font-weight: bold;
-            color: #FCECEC;
-          }
-          .table-wrapper {
-            overflow-x: auto;
-            background-color: rgba(255, 255, 255, 0.02);
-            border-radius: 12px;
-            border: 1px solid rgba(242, 160, 161, 0.05);
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-          }
-          th, td {
-            padding: 15px;
-            text-align: left;
-            border-bottom: 1px solid rgba(242, 160, 161, 0.05);
-          }
-          th {
-            background-color: rgba(255, 255, 255, 0.04);
-            color: #F2A0A1;
-            font-weight: 600;
-          }
-          tr:hover {
-            background-color: rgba(255, 255, 255, 0.01);
-          }
-          .badge {
-            padding: 4px 8px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-          }
-          .badge-age { background-color: rgba(242, 160, 161, 0.15); color: #F2A0A1; }
-          .badge-type { background-color: rgba(110, 158, 128, 0.15); color: #6E9E80; }
-          .badge-sub { background-color: rgba(255, 255, 255, 0.1); color: #FFF; }
-          .badge-sub.active { background-color: rgba(212, 175, 55, 0.2); color: #D4AF37; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h1>SkinIQ Admin Dashboard</h1>
-          
-          <div class="stats">
-            <div class="card">
-              <h3>Total Registered Users</h3>
-              <div class="value">${users.length}</div>
+app.get('/admin', async (req, res) => {
+  try {
+    const users = await db.profiles.listAll() || [];
+    const scans = await db.scans.listAll() || [];
+    const clicks = await db.clicks.listAll() || [];
+    const subs = await db.subscriptions.listAll() || [];
+    
+    const activeSubs = subs.filter(s => s.status === 'active').length;
+    
+    const userRows = users.map(user => {
+      const userScans = scans.filter(s => s.userId === user.id);
+      const userClicks = clicks.filter(c => c.userId === user.id);
+      const userSub = subs.find(s => s.userId === user.id) || { status: 'free' };
+      
+      return `
+        <tr>
+          <td>${user.name || 'Anonymous'}</td>
+          <td style="font-family: monospace; font-size: 12px; color: #8E7C7D;">${user.id}</td>
+          <td><span class="badge badge-age">${user.ageRange || 'Unknown'}</span></td>
+          <td><span class="badge badge-type">${user.skinType || 'Not Set'}</span></td>
+          <td><span class="badge badge-sub ${userSub.status === 'active' ? 'active' : ''}">${userSub.status.toUpperCase()}</span></td>
+          <td>${userScans.length} scans</td>
+          <td>${userClicks.length} clicks</td>
+          <td>${user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>SkinIQ Admin Dashboard</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              background-color: #1A0F10;
+              color: #FFF;
+              margin: 0;
+              padding: 20px;
+            }
+            .container {
+              max-width: 1200px;
+              margin: 0 auto;
+            }
+            h1 {
+              color: #F2A0A1;
+              font-size: 28px;
+              margin-bottom: 20px;
+              letter-spacing: 1px;
+            }
+            .stats {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+              gap: 20px;
+              margin-bottom: 30px;
+            }
+            .card {
+              background-color: rgba(255, 255, 255, 0.03);
+              border: 1px solid rgba(242, 160, 161, 0.1);
+              border-radius: 12px;
+              padding: 20px;
+              text-align: center;
+            }
+            .card h3 {
+              color: #8E7C7D;
+              margin: 0 0 10px 0;
+              font-size: 12px;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .card .value {
+              font-size: 36px;
+              font-weight: bold;
+              color: #FCECEC;
+            }
+            .table-wrapper {
+              overflow-x: auto;
+              background-color: rgba(255, 255, 255, 0.02);
+              border-radius: 12px;
+              border: 1px solid rgba(242, 160, 161, 0.05);
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+            th, td {
+              padding: 15px;
+              text-align: left;
+              border-bottom: 1px solid rgba(242, 160, 161, 0.05);
+            }
+            th {
+              background-color: rgba(255, 255, 255, 0.04);
+              color: #F2A0A1;
+              font-weight: 600;
+            }
+            tr:hover {
+              background-color: rgba(255, 255, 255, 0.01);
+            }
+            .badge {
+              padding: 4px 8px;
+              border-radius: 20px;
+              font-size: 11px;
+              font-weight: 600;
+            }
+            .badge-age { background-color: rgba(242, 160, 161, 0.15); color: #F2A0A1; }
+            .badge-type { background-color: rgba(110, 158, 128, 0.15); color: #6E9E80; }
+            .badge-sub { background-color: rgba(255, 255, 255, 0.1); color: #FFF; }
+            .badge-sub.active { background-color: rgba(212, 175, 55, 0.2); color: #D4AF37; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>SkinIQ Admin Dashboard</h1>
+            
+            <div class="stats">
+              <div class="card">
+                <h3>Total Registered Users</h3>
+                <div class="value">${users.length}</div>
+              </div>
+              <div class="card">
+                <h3>Total Dermal Scans</h3>
+                <div class="value">${scans.length}</div>
+              </div>
+              <div class="card">
+                <h3>Active Premium Subscriptions</h3>
+                <div class="value">${activeSubs}</div>
+              </div>
+              <div class="card">
+                <h3>Affiliate Product Clicks</h3>
+                <div class="value">${clicks.length}</div>
+              </div>
             </div>
-            <div class="card">
-              <h3>Total Dermal Scans</h3>
-              <div class="value">${scans.length}</div>
-            </div>
-            <div class="card">
-              <h3>Active Premium Subscriptions</h3>
-              <div class="value">${activeSubs}</div>
-            </div>
-            <div class="card">
-              <h3>Affiliate Product Clicks</h3>
-              <div class="value">${clicks.length}</div>
+            
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>User ID</th>
+                    <th>Age Group</th>
+                    <th>Skin Type</th>
+                    <th>Subscription</th>
+                    <th>Scans</th>
+                    <th>Clicks</th>
+                    <th>Registration Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${userRows || '<tr><td colspan="8" style="text-align: center; color: #8E7C7D;">No users registered yet.</td></tr>'}
+                </tbody>
+              </table>
             </div>
           </div>
-          
-          <div class="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>User ID</th>
-                  <th>Age Group</th>
-                  <th>Skin Type</th>
-                  <th>Subscription</th>
-                  <th>Scans</th>
-                  <th>Clicks</th>
-                  <th>Registration Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${userRows || '<tr><td colspan="8" style="text-align: center; color: #8E7C7D;">No users registered yet.</td></tr>'}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </body>
-    </html>
-  `);
+        </body>
+      </html>
+    `);
+  } catch (err) {
+    res.status(500).send('Admin dashboard server error');
+  }
 });
 
 // Start backend
