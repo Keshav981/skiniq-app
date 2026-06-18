@@ -84,6 +84,7 @@ interface AppContextType {
   backendUrl: string;
   setBackendUrl: (url: string) => void;
   saveProfile: (name: string, ageRange: string, skinType: string | null, skinGoals: string[]) => Promise<Profile>;
+  loginUser: (name: string) => Promise<Profile>;
   submitPhotoForAnalysis: (imageBase64: string, savePhoto: boolean, isFrontFacing?: boolean) => Promise<Scan>;
   setCurrentScan: (scan: Scan | null) => void;
   trackProductClick: (productId: string) => Promise<void>;
@@ -136,33 +137,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const initialize = async () => {
       try {
         let activeUrl = getDefaultBackendUrl();
-        const savedUrl = await AsyncStorage.getItem('@skiniq_backend_url');
-        
-        if (savedUrl) {
-          // If the saved URL is a local LAN IP, check if the current Metro IP is different and update it
-          const localIpRegex = /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
-          if (localIpRegex.test(savedUrl)) {
-            const currentHostUri = Constants.expoConfig?.hostUri;
-            if (currentHostUri) {
-              const currentHostIp = currentHostUri.split(':')[0];
-              const savedIp = savedUrl.replace('http://', '').split(':')[0];
-              if (savedIp !== currentHostIp) {
-                const port = savedUrl.split(':').pop();
-                const portVal = port && !isNaN(Number(port)) ? port : '3000';
-                const newUrl = `http://${currentHostIp}:${portVal}`;
-                console.log(`[SkinIQ] Dynamic host IP change detected: migrating backend URL from ${savedUrl} to ${newUrl}`);
-                activeUrl = newUrl;
-                await AsyncStorage.setItem('@skiniq_backend_url', newUrl);
+        const isProdWeb = Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+        let githubFetched = false;
+
+        // Dynamically discover active backend URL from GitHub on web in production
+        if (isProdWeb) {
+          try {
+            console.log('[SkinIQ] Resolving dynamic backend URL from GitHub...');
+            const discRes = await fetch('https://raw.githubusercontent.com/Keshav981/skiniq-app/main/backend_url.txt');
+            if (discRes.ok) {
+              const urlText = (await discRes.text()).trim();
+              if (urlText.startsWith('https://')) {
+                activeUrl = urlText;
+                githubFetched = true;
+                console.log(`[SkinIQ] Dynamically discovered active backend URL: ${activeUrl}`);
+                setBackendUrlState(activeUrl);
+              }
+            }
+          } catch (discErr) {
+            console.warn('[SkinIQ] Dynamic backend URL discovery failed:', discErr);
+          }
+        }
+
+        // Only override with savedUrl if we didn't successfully fetch from GitHub in production web
+        if (!githubFetched) {
+          const savedUrl = await AsyncStorage.getItem('@skiniq_backend_url');
+          if (savedUrl) {
+            // If the saved URL is a local LAN IP, check if the current Metro IP is different and update it
+            const localIpRegex = /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
+            if (localIpRegex.test(savedUrl)) {
+              const currentHostUri = Constants.expoConfig?.hostUri;
+              if (currentHostUri) {
+                const currentHostIp = currentHostUri.split(':')[0];
+                const savedIp = savedUrl.replace('http://', '').split(':')[0];
+                if (savedIp !== currentHostIp) {
+                  const port = savedUrl.split(':').pop();
+                  const portVal = port && !isNaN(Number(port)) ? port : '3000';
+                  const newUrl = `http://${currentHostIp}:${portVal}`;
+                  console.log(`[SkinIQ] Dynamic host IP change detected: migrating backend URL from ${savedUrl} to ${newUrl}`);
+                  activeUrl = newUrl;
+                  await AsyncStorage.setItem('@skiniq_backend_url', newUrl);
+                } else {
+                  activeUrl = savedUrl;
+                }
               } else {
                 activeUrl = savedUrl;
               }
             } else {
               activeUrl = savedUrl;
             }
+            setBackendUrlState(activeUrl);
           } else {
-            activeUrl = savedUrl;
+            setBackendUrlState(activeUrl);
           }
-          setBackendUrlState(activeUrl);
         } else {
           setBackendUrlState(activeUrl);
         }
@@ -328,6 +355,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setProfile(mockProfile);
       await AsyncStorage.setItem('@skiniq_profile', JSON.stringify(mockProfile));
       return mockProfile;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginUser = async (name: string): Promise<Profile> => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${backendUrl}/api/profile/login?name=${encodeURIComponent(name)}`, {
+        headers: { 'bypass-tunnel-reminder': 'true' }
+      });
+      if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error('Profile not found. Please register as a new user.');
+        }
+        throw new Error('Login failed. Please verify your connection or try again.');
+      }
+      const existingProfile = await res.json();
+      setProfile(existingProfile);
+      await AsyncStorage.setItem('@skiniq_profile', JSON.stringify(existingProfile));
+      
+      // Load user scans, subscriptions, and products tied to this profile
+      await fetchUserData(existingProfile.id, backendUrl);
+      
+      return existingProfile;
+    } catch (err: any) {
+      console.error('Login user failed:', err);
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -542,6 +597,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       backendUrl,
       setBackendUrl,
       saveProfile,
+      loginUser,
       submitPhotoForAnalysis,
       setCurrentScan,
       trackProductClick,
