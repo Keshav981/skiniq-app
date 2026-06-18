@@ -1,0 +1,222 @@
+[
+  {
+    "id": "prod-1",
+    "name": "Hyaluronic Acid 2% + B5",
+    "brand": "Minimalist",
+    "category": "serum",
+    "price_inr": 599,
+    "affiliate_link": "https://www.amazon.in/dp/B08V89NTCS?tag=skiniq-21",
+    "reason_text": "An intensely hydrating daily serum that uses multi-molecular hyaluronic acid to deeply plump and moisturize dehydrated skin.",
+    "dimensions": ["hydration"],
+    "image_url": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-2",
+    "name": "Hyaluronic Acid 2% + B5",
+    "brand": "The Ordinary",
+    "category": "serum",
+    "price_inr": 700,
+    "affiliate_link": "https://n/a",
+    "reason_text": "A clinical formulation combining low, medium, and high-molecular weight hyaluronic acid to deliver hydration to multiple layers of skin.",
+    "dimensions": ["hydration"],
+    "image_url": "https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-3",
+    "name": "Water Drench Hydrating Gel",
+    "brand": "Dot & Key",
+    "category": "moisturizer",
+    "price_inr": 395,
+    "affiliate_link": "https://www.amazon.in/dp/B08DFW9HNS?tag=skiniq-21",
+    "reason_text": "A lightweight oil-free water gel packed with Hyaluronic acid and coconut water to instantly quench thirsty skin and lock in moisture.",
+    "dimensions": ["hydration"],
+    "image_url": "https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-4",
+    "name": "10% Niacinamide Face Serum",
+    "brand": "Minimalist",
+    "category": "serum",
+    "price_inr": 599,
+    "affiliate_link": "https://www.amazon.in/dp/B08FF3VP62?tag=skiniq-21",
+    "reason_text": "A nourishing serum that repairs the skin barrier, reduces blemish marks, and improves overall texture smoothness.",
+    "dimensions": ["texture", "pores"],
+    "image_url": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-5",
+    "name": "Niacinamide 10% + Zinc 1%",
+    "brand": "The Ordinary",
+    "category": "serum",
+    "price_inr": 600,
+    "affiliate_link": "https://n/a",
+    "reason_text": "Reduces skin congestion, balances visible sebum activity, and smooths uneven skin texture effectively.",
+    "dimensions": ["texture", "pores", "oiliness"],
+    "image_url": "https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-6",
+    "name": "10% Niacinamide Serum with Rice Water",
+    "brand": "Plum",
+    "category": "serum",
+    "price_inr": 590,
+    "affiliate_link": "https://www.amazon.in/dp/B096K6P6B6?tag=skiniq-21",
+    "reason_text": "Combines skin-barrier repairing Niacinamide with clarifying Rice Water to smooth texture and fade spots.",
+    "dimensions": ["texture", "tone"],
+    "image_url": "https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-7",
+    "name": "2% Salicylic Acid Serum",
+    "brand": "Minimalist",
+    "category": "serum",
+    "price_inr": 549,
+    "affiliate_link": "https://www.amazon.in/dp/B08V85ZHRZ?tag=skiniq-21",
+    "reason_text": "An BHA exfoliant that penetrates deep into pores to dissolve excess sebum, dirt, and blackheads, reducing visible pore size.",
+    "dimensions": ["pores", "oiliness"],
+    "image_url": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-8",
+    "name": "Salicylic Acid 2% Solution",
+    "brand": "The Ordinary",
+    "category": "serum",
+    "price_inr": 550,
+    "affiliate_link": "https://n/a",
+    "reason_text": "Formulated for oily and blemish-prone skin. It gently exfoliates the inside walls of pores to combat shine and oiliness.",
+    "dimensions": ["pores", "oiliness"],
+    "image_url": "https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-9",
+    "name": "Green Tea Pore Cleansing Face Wash",
+    "brand": "Plum",
+    "category": "cleanser",
+    "price_inr": 349,
+    "affiliate_link": "https://www.amazon.in/dp/B00V4L98DG?tag=skiniq-21",
+    "reason_text": "A soap-free foaming cleanser loaded with green tea extracts and glycolic acid to sweep away excess oil and clarify pores.",
+    "dimensions": ["pores", "oiliness"],
+    "image_url": "https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-10",
+    "name": "10% Vitamin C Serum",
+    "brand": "Minimalist",
+    "category": "serum",
+    "price_inr": 699,
+    "affiliate_link": "https://www.amazon.in/dp/B08V84C5N8?tag=skiniq-21",
+    "reason_text": "A stable, non-irritating Vitamin C serum formulated with Acetyl Glucosamine to brighten skin tone and reduce dark spots.",
+    "dimensions": ["tone", "sun_damage"],
+    "image_url": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-11",
+    "name": "15% Vitamin C Glow Serum",
+    "brand": "Plum",
+    "category": "serum",
+    "price_inr": 550,
+    "affiliate_link": "https://www.amazon.in/dp/B08Z8G89X2?tag=skiniq-21",
+    "reason_text": "A quick-absorbing serum powered by 15% Ethyl Ascorbic Acid, Mandarin orange, and Kakadu Plum to combat hyperpigmentation.",
+    "dimensions": ["tone", "sun_damage"],
+    "image_url": "https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-12",
+    "name": "C-Glow Face Cream",
+    "brand": "Bella Vita Organic",
+    "category": "moisturizer",
+    "price_inr": 375,
+    "affiliate_link": "https://www.amazon.in/dp/B08V85ZHRZ?tag=skiniq-21",
+    "reason_text": "A brightening gel cream with Vitamin C, Sandalwood, and Honey to even out complexion and shield skin from dullness.",
+    "dimensions": ["tone"],
+    "image_url": "https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-13",
+    "name": "0.3% Retinol + Q10 Serum",
+    "brand": "Minimalist",
+    "category": "serum",
+    "price_inr": 599,
+    "affiliate_link": "https://www.amazon.in/dp/B08Z44GDW7?tag=skiniq-21",
+    "reason_text": "A highly stable anti-aging serum that speeds up cell turnover, boosts collagen production, and smooths fine lines.",
+    "dimensions": ["fine_lines"],
+    "image_url": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-14",
+    "name": "Retinol 0.2% in Squalane",
+    "brand": "The Ordinary",
+    "category": "serum",
+    "price_inr": 650,
+    "affiliate_link": "https://n/a",
+    "reason_text": "A water-free solution containing 0.2% pure retinol to reduce the appearance of fine lines, wrinkles, and photo-damage.",
+    "dimensions": ["fine_lines", "sun_damage"],
+    "image_url": "https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-15",
+    "name": "Retinol & Hyaluronic Acid Lift Cream",
+    "brand": "Pilgrim",
+    "category": "moisturizer",
+    "price_inr": 550,
+    "affiliate_link": "https://www.amazon.in/dp/B08V84C5N8?tag=skiniq-21",
+    "reason_text": "An anti-aging night cream that tightens, hydrates, and target wrinkles, helping you wake up to smoother, firmer skin.",
+    "dimensions": ["fine_lines", "hydration"],
+    "image_url": "https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-16",
+    "name": "Silymarin CF (Antioxidant Vitamin C)",
+    "brand": "SkinCeuticals India",
+    "category": "serum",
+    "price_inr": 4500,
+    "affiliate_link": "https://n/a",
+    "reason_text": "A high-potency antioxidant serum specifically formulated for oily skin to reduce sebum oxidation and prevent breakouts.",
+    "dimensions": ["oiliness", "sun_damage"],
+    "image_url": "https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-17",
+    "name": "Cica + Niacinamide Sunscreen SPF 50",
+    "brand": "Dot & Key",
+    "category": "sunscreen",
+    "price_inr": 445,
+    "affiliate_link": "https://www.amazon.in/dp/B09V4L82D9?tag=skiniq-21",
+    "reason_text": "Provides broad-spectrum UV protection while niacinamide helps fade existing dark spots and cica calms skin inflammation.",
+    "dimensions": ["sun_damage", "tone"],
+    "image_url": "https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-18",
+    "name": "Oat Intense Hydrating Cream",
+    "brand": "Plum",
+    "category": "moisturizer",
+    "price_inr": 490,
+    "affiliate_link": "https://www.amazon.in/dp/B0BL3Q8R7S?tag=skiniq-21",
+    "reason_text": "Formulated with colloidal oatmeal and ceramides, this cream restores hydration to dry and sensitive skin barriers.",
+    "dimensions": ["hydration", "texture"],
+    "image_url": "https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-19",
+    "name": "Gentle Skin Cleanser",
+    "brand": "Cetaphil",
+    "category": "cleanser",
+    "price_inr": 390,
+    "affiliate_link": "https://www.amazon.in/dp/B01CCGW7D6?tag=skiniq-21",
+    "reason_text": "A dermatologist-recommended non-foaming formula that gently cleanses sensitive and dry skin without stripping its natural moisture.",
+    "dimensions": ["hydration", "texture"],
+    "image_url": "https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?auto=format&fit=crop&w=300&h=300&q=80"
+  },
+  {
+    "id": "prod-20",
+    "name": "2% Alpha Arbutin + Hyaluronic Acid",
+    "brand": "Minimalist",
+    "category": "serum",
+    "price_inr": 549,
+    "affiliate_link": "https://www.amazon.in/dp/B08V862LDT?tag=skiniq-21",
+    "reason_text": "Targeted pigment-corrector that inhibits melanin production to reduce hyperpigmentation, tanning, and dark spots.",
+    "dimensions": ["tone", "sun_damage"],
+    "image_url": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=300&h=300&q=80"
+  }
+]
