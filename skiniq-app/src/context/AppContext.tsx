@@ -101,7 +101,7 @@ const getDefaultBackendUrl = () => {
   if (Platform.OS === 'web') {
     // If running in production browser (e.g. Surge), use the public tunnel URL
     if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      return 'https://skiniq-prod-2026-backend.loca.lt';
+      return 'https://skiniq-api-2026-prod.loca.lt';
     }
   }
   const hostUri = Constants.expoConfig?.hostUri;
