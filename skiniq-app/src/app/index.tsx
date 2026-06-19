@@ -524,7 +524,7 @@ export default function AppIndex() {
       <SafeAreaView style={styles.onboardContainer}>
         <ScrollView contentContainerStyle={styles.onboardScroll}>
           <View style={styles.onboardHeaderContainer}>
-            <Text style={styles.logoText}>SkinIQ</Text>
+            <Text style={styles.logoText}>Derma AI</Text>
             <Text style={styles.subtitleText}>Your AI Beauty-Tech Companion</Text>
           </View>
 
@@ -717,7 +717,7 @@ export default function AppIndex() {
               <Text style={styles.headerAvatarText}>{profile.name ? profile.name.charAt(0).toUpperCase() : 'U'}</Text>
             </View>
             <View style={{ marginLeft: 10 }}>
-              <Text style={styles.headerLogo}>SkinIQ</Text>
+              <Text style={styles.headerLogo}>Derma AI</Text>
               <Text style={styles.headerWelcome}>Hello, {profile.name}</Text>
             </View>
           </View>
@@ -1336,7 +1336,7 @@ export default function AppIndex() {
 
             {/* Policy & Legal disclaimer */}
             <View style={styles.policyCard}>
-              <Text style={styles.policyHeader}>SkinIQ Policy Safeguards</Text>
+              <Text style={styles.policyHeader}>Derma AI Policy Safeguards</Text>
               <Text style={styles.policyDesc}>
                 1. Face scans are treated as temporary raw data and analyzed using secure end-to-end HTTPS.
               </Text>
@@ -1373,7 +1373,7 @@ export default function AppIndex() {
           </View>
 
           <ScrollView contentContainerStyle={styles.paywallScroll}>
-            <Text style={styles.paywallTitle}>SkinIQ Pro</Text>
+            <Text style={styles.paywallTitle}>Derma AI Pro</Text>
             <Text style={styles.paywallSubtitle}>Unlock Your Complete Skincare Tracker</Text>
 
             <View style={styles.socialProofBox}>
@@ -1434,7 +1434,7 @@ export default function AppIndex() {
               onPress={async () => {
                 await buySubscription('annual');
                 setPaywallVisible(false);
-                Alert.alert('Subscription Unlocked', 'Congratulations! You are now a SkinIQ Pro member. Unlimited scans unlocked.');
+                Alert.alert('Subscription Unlocked', 'Congratulations! You are now a Derma AI Pro member. Unlimited scans unlocked.');
               }}
             >
               <Text style={styles.primaryButtonText}>Activate Sandbox Free Trial</Text>
