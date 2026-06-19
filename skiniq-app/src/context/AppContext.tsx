@@ -159,10 +159,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         let activeUrl = getDefaultBackendUrl();
         const isProdWeb = Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+        
+        // Read saved URL first to check if we need to force a GitHub fetch
+        const savedUrl = await AsyncStorage.getItem('@dermaai_backend_url');
+        const isTunnelUrl = (url: string) => url.includes('trycloudflare.com') || url.includes('loca.lt');
+        const forceGitHubFetch = isProdWeb || (savedUrl && isTunnelUrl(savedUrl)) || isTunnelUrl(activeUrl);
+
         let githubFetched = false;
 
-        // Dynamically discover active backend URL from GitHub on web in production
-        if (isProdWeb) {
+        // Dynamically discover active backend URL from GitHub on web in production or if using tunnel fallbacks
+        if (forceGitHubFetch) {
           try {
             console.log('[Derma AI] Resolving dynamic backend URL from GitHub...');
             const discRes = await fetch('https://raw.githubusercontent.com/Keshav981/skiniq-app/main/backend_url.txt?t=' + Date.now());
@@ -180,9 +186,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
 
-        // Only override with savedUrl if we didn't successfully fetch from GitHub in production web
+        // Only override with savedUrl if we didn't successfully fetch from GitHub
         if (!githubFetched) {
-          const savedUrl = await AsyncStorage.getItem('@dermaai_backend_url');
           if (savedUrl) {
             // If the saved URL is a local LAN IP, check if the current Metro IP is different and update it
             const localIpRegex = /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
