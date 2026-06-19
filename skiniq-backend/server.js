@@ -161,6 +161,15 @@ async function analyzeSkinWithClaude(imageBase64, userContext) {
 You are a premium, certified aesthetic skin consultant representing the SkinIQ beauty-tech platform.
 Analyze this user's face photo for cosmetic and visual skin quality indicators. 
 
+CRITICAL FACE VERIFICATION PROTOCOL:
+1. You MUST first verify if the image contains a human face.
+2. If the image does NOT contain a human face (e.g., it is a pencil sharpener, an object, text, an animal, a blank wall, or a landscape), you MUST immediately stop analysis and return ONLY a JSON block containing an "error" key.
+   Example format:
+   {
+     "error": "No human face detected. Please take a clear, well-lit photo of your face."
+   }
+3. ONLY proceed with the cosmetic analysis if a human face is clearly visible.
+
 CRITICAL ETHICAL & REGULATORY COMPLIANCE RULES:
 1. NEVER diagnose skin conditions. Never mention words like acne vulgaris, eczema, rosacea, dermatitis, psoriasis, infection, melanoma, melasma, pathology, disease, or medical terms.
 2. Frame all findings as "visible cosmetic indicators" or "surface characteristics". 
@@ -253,6 +262,10 @@ JSON OUTPUT STRUCTURE (Mandatory format):
     const jsonStr = responseText.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
     const parsed = JSON.parse(jsonStr);
     
+    if (parsed.error) {
+      return parsed;
+    }
+    
     // Safety check - force compliance in all fields
     Object.keys(parsed.explanations).forEach(key => {
       parsed.explanations[key] = sanitizeCosmeticText(parsed.explanations[key]);
@@ -278,6 +291,15 @@ async function analyzeSkinWithGemini(imageBase64, userContext, catalogString) {
   const prompt = `
 You are a premium, certified aesthetic skin consultant representing the SkinIQ beauty-tech platform.
 Analyze this user's face photo for cosmetic and visual skin quality indicators. 
+
+CRITICAL FACE VERIFICATION PROTOCOL:
+1. You MUST first verify if the image contains a human face.
+2. If the image does NOT contain a human face (e.g., it is a pencil sharpener, an object, text, an animal, a blank wall, or a landscape), you MUST immediately stop analysis and return ONLY a JSON block containing an "error" key.
+   Example format:
+   {
+     "error": "No human face detected. Please take a clear, well-lit photo of your face."
+   }
+3. ONLY proceed with the cosmetic analysis if a human face is clearly visible.
 
 CRITICAL ETHICAL & REGULATORY COMPLIANCE RULES:
 1. NEVER diagnose skin conditions. Never mention words like acne vulgaris, eczema, rosacea, dermatitis, psoriasis, infection, melanoma, melasma, pathology, disease, or medical terms.
@@ -411,6 +433,10 @@ JSON OUTPUT STRUCTURE (Mandatory format):
     const responseText = result.candidates[0].content.parts[0].text.trim();
     const jsonStr = responseText.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
     const parsed = JSON.parse(jsonStr);
+
+    if (parsed.error) {
+      return parsed;
+    }
 
     // Safety check - force compliance in all fields
     Object.keys(parsed.explanations).forEach(key => {
@@ -652,6 +678,12 @@ app.post('/api/scans', async (req, res) => {
     } else {
       console.log('Running Sandbox Mock skin analysis...');
       analysis = generateMockAnalysis(userContext);
+    }
+
+    // Check if face verification failed
+    if (analysis && analysis.error) {
+      console.log(`[SkinIQ] Face verification failed: ${analysis.error}`);
+      return res.status(400).json({ error: analysis.error });
     }
 
     // Ensure coordinates are aligned properly on the face model and not hallucinated by LLM
