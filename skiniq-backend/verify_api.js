@@ -10,8 +10,17 @@ function generateUUIDv4() {
   });
 }
 
-// Dummy base64 face-like image data
-const dummyImageBase64 = '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
+// 1x1 blank white pixel base64 (definitely not a face)
+const blankImageBase64 = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+// Download a small face portrait and convert to base64
+async function getRealFaceBase64() {
+  console.log('[Test] Downloading test face portrait from Unsplash...');
+  const res = await fetch('https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80');
+  if (!res.ok) throw new Error('Failed to download test face image');
+  const buffer = await res.buffer();
+  return buffer.toString('base64');
+}
 
 async function verify() {
   const userId = generateUUIDv4();
@@ -20,10 +29,10 @@ async function verify() {
   // 1. Create Profile
   const profilePayload = {
     id: userId,
-    name: 'Integration Test User',
+    name: 'Face Verification Test User',
     ageRange: '25-34',
-    skinType: 'dry',
-    skinGoals: ['hydration', 'anti-aging']
+    skinType: 'combination',
+    skinGoals: ['hydration', 'pores']
   };
 
   console.log('[Test] Sending POST /api/profile...');
@@ -45,36 +54,66 @@ async function verify() {
   const profileData = await profileRes.json();
   console.log('[Test] Profile creation success:', profileData);
 
-  // 2. Perform Scan
-  console.log('[Test] Sending POST /api/scans...');
-  const scanPayload = {
-    userId: userId,
-    imageBase64: dummyImageBase64,
-    savePhoto: false,
-    isFrontFacing: false
-  };
-
-  const scanRes = await fetch(`${backendUrl}/api/scans`, {
+  // 2. Perform Non-Face Scan (Should fail)
+  console.log('[Test] Sending POST /api/scans with blank image (expecting rejection)...');
+  const rejectRes = await fetch(`${backendUrl}/api/scans`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'bypass-tunnel-reminder': 'true'
     },
-    body: JSON.stringify(scanPayload)
+    body: JSON.stringify({
+      userId: userId,
+      imageBase64: blankImageBase64,
+      savePhoto: false,
+      isFrontFacing: false
+    })
   });
 
-  if (!scanRes.ok) {
-    const errText = await scanRes.text();
-    console.error(`[Test] Scan creation failed with status ${scanRes.status}:`, errText);
+  if (rejectRes.status === 400) {
+    const rejectData = await rejectRes.json();
+    console.log('[Test] Success! API correctly rejected non-face image:', rejectData);
+  } else {
+    console.error(`[Test] Fail! API did not reject the blank image as expected. Status: ${rejectRes.status}`);
     process.exit(1);
   }
 
-  const scanData = await scanRes.json();
-  console.log('[Test] Scan creation success. Returned scores:', scanData.scores);
-  console.log('[Test] Detections:', scanData.detections);
-  console.log('[Test] Recommendations:', scanData.recommended_products ? scanData.recommended_products.length : 0, 'products');
+  // 3. Perform Valid Face Scan (Should succeed)
+  let faceImageBase64;
+  try {
+    faceImageBase64 = await getRealFaceBase64();
+  } catch (err) {
+    console.warn('[Test] Warning: Unsplash down, skipping successful scan check:', err.message);
+  }
 
-  // 3. Clean up history
+  if (faceImageBase64) {
+    console.log('[Test] Sending POST /api/scans with valid face portrait...');
+    const scanRes = await fetch(`${backendUrl}/api/scans`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'bypass-tunnel-reminder': 'true'
+      },
+      body: JSON.stringify({
+        userId: userId,
+        imageBase64: faceImageBase64,
+        savePhoto: false,
+        isFrontFacing: false
+      })
+    });
+
+    if (!scanRes.ok) {
+      const errText = await scanRes.text();
+      console.error(`[Test] Scan creation failed with status ${scanRes.status}:`, errText);
+      process.exit(1);
+    }
+
+    const scanData = await scanRes.json();
+    console.log('[Test] Scan creation success! Returned scores:', scanData.scores);
+    console.log('[Test] Detections count:', scanData.detections ? scanData.detections.length : 0);
+  }
+
+  // 4. Clean up history
   console.log('[Test] Cleaning up history via DELETE /api/history...');
   const deleteRes = await fetch(`${backendUrl}/api/history/${userId}`, {
     method: 'DELETE',
