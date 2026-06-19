@@ -672,8 +672,11 @@ app.post('/api/scans', async (req, res) => {
       try {
         analysis = await analyzeSkinWithGemini(imageBase64, userContext, catalogString);
       } catch (geminiErr) {
-        console.warn('Gemini Vision call failed, recovering with sandbox mock analysis:', geminiErr.message);
-        analysis = generateMockAnalysis(userContext);
+        console.error('Gemini Vision call failed:', geminiErr.message);
+        if (geminiErr.message.includes('high demand') || geminiErr.message.includes('quota') || geminiErr.message.includes('limit') || geminiErr.message.includes('busy')) {
+          return res.status(429).json({ error: 'The AI skin analysis server is currently busy due to high demand. Please wait a few seconds and try again.' });
+        }
+        return res.status(503).json({ error: 'AI skin analysis server is temporarily unavailable. Please try again shortly.' });
       }
     } else {
       console.log('Running Sandbox Mock skin analysis...');
