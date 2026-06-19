@@ -23,6 +23,22 @@ import { useApp, Scan, Product, ScanScores, ScanExplanations } from '../context/
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// Helper to convert URI (like blob or local file) to base64
+const getBase64FromUri = async (uri: string): Promise<string> => {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64data = reader.result as string;
+      const rawBase64 = base64data.split(',')[1];
+      resolve(rawBase64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
 // Color Palette (Warm Rose & Blush Tech Aesthetics)
 const COLORS = {
   bgLight: '#FFFBF9',
@@ -326,10 +342,18 @@ export default function AppIndex() {
         quality: 0.6,
         base64: true
       });
-      if (photo && photo.base64) {
-        setUseCameraActive(false);
-        setAnalyzingPhotoUri(`data:image/jpeg;base64,${photo.base64}`);
-        await uploadAndAnalyze(photo.base64, isFront);
+      if (photo) {
+        let base64Data = photo.base64;
+        if (!base64Data && photo.uri) {
+          base64Data = await getBase64FromUri(photo.uri);
+        }
+        if (base64Data) {
+          setUseCameraActive(false);
+          setAnalyzingPhotoUri(`data:image/jpeg;base64,${base64Data}`);
+          await uploadAndAnalyze(base64Data, isFront);
+        } else {
+          throw new Error('No picture data retrieved.');
+        }
       }
     } catch (e: any) {
       setIsAnalyzing(false);
@@ -353,12 +377,23 @@ export default function AppIndex() {
         base64: true
       });
 
-      if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets[0].base64) {
-        setAnalyzingPhotoIsFront(false);
-        setAnalyzingPhotoUri(`data:image/jpeg;base64,${pickerResult.assets[0].base64}`);
-        await uploadAndAnalyze(pickerResult.assets[0].base64, false);
+      if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets[0]) {
+        let base64Img = pickerResult.assets[0].base64;
+        if (!base64Img && pickerResult.assets[0].uri) {
+          setAnalysisProgressMsg('Reading photo file...');
+          setIsAnalyzing(true);
+          base64Img = await getBase64FromUri(pickerResult.assets[0].uri);
+        }
+        if (base64Img) {
+          setAnalyzingPhotoIsFront(false);
+          setAnalyzingPhotoUri(`data:image/jpeg;base64,${base64Img}`);
+          await uploadAndAnalyze(base64Img, false);
+        } else {
+          Alert.alert('Gallery Error', 'Selected file has no image data.');
+        }
       }
     } catch (e: any) {
+      setIsAnalyzing(false);
       Alert.alert('Gallery Error', 'Failed to retrieve image: ' + e.message);
     }
   };
