@@ -116,6 +116,15 @@ const getDefaultBackendUrl = () => {
   return 'http://localhost:3000'; // iOS simulator or web
 };
 
+// Generate RFC4122 version 4 compliant UUID
+const generateUUIDv4 = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [scans, setScans] = useState<Scan[]>([]);
@@ -197,6 +206,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const savedProfile = await AsyncStorage.getItem('@skiniq_profile');
         if (savedProfile) {
           const parsedProfile = JSON.parse(savedProfile);
+          
+          // Legacy check: if the profile ID is not a valid UUID, convert it and save it
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          if (!uuidRegex.test(parsedProfile.id)) {
+            console.log(`[SkinIQ] Legacy profile ID "${parsedProfile.id}" detected, migrating to UUID...`);
+            parsedProfile.id = generateUUIDv4();
+            await AsyncStorage.setItem('@skiniq_profile', JSON.stringify(parsedProfile));
+          }
+          
           setProfile(parsedProfile);
           
           // Load other data tied to this profile using activeUrl to avoid stale closure state
@@ -322,11 +340,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const saveProfile = async (name: string, ageRange: string, skinType: string | null, skinGoals: string[]) => {
     setLoading(true);
     try {
-      // Generate a user ID if none exists
+      // Generate a user ID if none exists or is invalid
       let userId = profile?.id;
-      if (!userId) {
-        // Simple random UUID replacement for client setup
-        userId = 'usr-' + Math.random().toString(36).substring(2, 11);
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!userId || !uuidRegex.test(userId)) {
+        userId = generateUUIDv4();
       }
 
       const profilePayload = { id: userId, name, ageRange, skinType, skinGoals };
@@ -351,7 +369,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) {
       console.error('Save profile failed:', err);
       // Fallback local write
-      const mockProfile: Profile = { id: 'usr-local', name, ageRange, skinType, skinGoals };
+      const fallbackId = (profile?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[0-9a-f]{12}$/i.test(profile.id))
+        ? profile.id
+        : generateUUIDv4();
+      const mockProfile: Profile = { id: fallbackId, name, ageRange, skinType, skinGoals };
       setProfile(mockProfile);
       await AsyncStorage.setItem('@skiniq_profile', JSON.stringify(mockProfile));
       return mockProfile;
