@@ -158,17 +158,18 @@ async function analyzeSkinWithClaude(imageBase64, userContext) {
 
   // Highly detailed cosmetic-only analysis prompt instructing Claude how to visually grade skin
   const prompt = `
-You are a premium, certified aesthetic skin consultant representing the SkinIQ beauty-tech platform.
+You are a premium, certified aesthetic skin consultant representing the Derma AI beauty-tech platform.
 Analyze this user's face photo for cosmetic and visual skin quality indicators. 
 
 CRITICAL FACE VERIFICATION PROTOCOL:
-1. You MUST first verify if the image contains a human face.
-2. If the image does NOT contain a human face (e.g., it is a pencil sharpener, an object, text, an animal, a blank wall, or a landscape), you MUST immediately stop analysis and return ONLY a JSON block containing an "error" key.
+1. You MUST first verify if the image contains a real, living, biological human face (a direct photograph of a real person's face).
+2. You MUST reject and return an error if the image is a drawing, sketch, illustration, painting, cartoon, 3D/digital avatar, hand-drawn face on paper, printout of a face on paper, photo of a digital screen showing a face, or if it is a non-face object (like a pencil sharpener, a blank piece of paper, paper texture, an animal, a blank wall, or a landscape).
+3. If the image is invalid or a fake face representation, you MUST immediately stop analysis and return ONLY a JSON block containing an "error" key.
    Example format:
    {
-     "error": "No human face detected. Please take a clear, well-lit photo of your face."
+     "error": "No real human face detected. Please take a clear, well-lit photo of your face directly from your camera."
    }
-3. ONLY proceed with the cosmetic analysis if a human face is clearly visible.
+4. ONLY proceed with the cosmetic analysis if a real, live human face is clearly visible.
 
 CRITICAL ETHICAL & REGULATORY COMPLIANCE RULES:
 1. NEVER diagnose skin conditions. Never mention words like acne vulgaris, eczema, rosacea, dermatitis, psoriasis, infection, melanoma, melasma, pathology, disease, or medical terms.
@@ -289,17 +290,18 @@ async function analyzeSkinWithGemini(imageBase64, userContext, catalogString) {
   }
 
   const prompt = `
-You are a premium, certified aesthetic skin consultant representing the SkinIQ beauty-tech platform.
+You are a premium, certified aesthetic skin consultant representing the Derma AI beauty-tech platform.
 Analyze this user's face photo for cosmetic and visual skin quality indicators. 
 
 CRITICAL FACE VERIFICATION PROTOCOL:
-1. You MUST first verify if the image contains a human face.
-2. If the image does NOT contain a human face (e.g., it is a pencil sharpener, an object, text, an animal, a blank wall, or a landscape), you MUST immediately stop analysis and return ONLY a JSON block containing an "error" key.
+1. You MUST first verify if the image contains a real, living, biological human face (a direct photograph of a real person's face).
+2. You MUST reject and return an error if the image is a drawing, sketch, illustration, painting, cartoon, 3D/digital avatar, hand-drawn face on paper, printout of a face on paper, photo of a digital screen showing a face, or if it is a non-face object (like a pencil sharpener, a blank piece of paper, paper texture, an animal, a blank wall, or a landscape).
+3. If the image is invalid or a fake face representation, you MUST immediately stop analysis and return ONLY a JSON block containing an "error" key.
    Example format:
    {
-     "error": "No human face detected. Please take a clear, well-lit photo of your face."
+     "error": "No real human face detected. Please take a clear, well-lit photo of your face directly from your camera."
    }
-3. ONLY proceed with the cosmetic analysis if a human face is clearly visible.
+4. ONLY proceed with the cosmetic analysis if a real, live human face is clearly visible.
 
 CRITICAL ETHICAL & REGULATORY COMPLIANCE RULES:
 1. NEVER diagnose skin conditions. Never mention words like acne vulgaris, eczema, rosacea, dermatitis, psoriasis, infection, melanoma, melasma, pathology, disease, or medical terms.
@@ -685,7 +687,7 @@ app.post('/api/scans', async (req, res) => {
 
     // Check if face verification failed
     if (analysis && analysis.error) {
-      console.log(`[SkinIQ] Face verification failed: ${analysis.error}`);
+      console.log(`[Derma AI] Face verification failed: ${analysis.error}`);
       return res.status(400).json({ error: analysis.error });
     }
 
@@ -875,7 +877,7 @@ app.get('/admin', async (req, res) => {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>SkinIQ Admin Dashboard</title>
+          <title>Derma AI Admin Dashboard</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
             body {
@@ -957,7 +959,7 @@ app.get('/admin', async (req, res) => {
         </head>
         <body>
           <div class="container">
-            <h1>SkinIQ Admin Dashboard</h1>
+            <h1>Derma AI Admin Dashboard</h1>
             
             <div class="stats">
               <div class="card">
@@ -1008,5 +1010,5 @@ app.get('/admin', async (req, res) => {
 
 // Start backend
 app.listen(PORT, () => {
-  console.log(`SkinIQ Backend running on port ${PORT}`);
+  console.log(`Derma AI Backend running on port ${PORT}`);
 });
