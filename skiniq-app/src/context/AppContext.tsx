@@ -153,7 +153,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (isProdWeb) {
           try {
             console.log('[SkinIQ] Resolving dynamic backend URL from GitHub...');
-            const discRes = await fetch('https://raw.githubusercontent.com/Keshav981/skiniq-app/main/backend_url.txt');
+            const discRes = await fetch('https://raw.githubusercontent.com/Keshav981/skiniq-app/main/backend_url.txt?t=' + Date.now());
             if (discRes.ok) {
               const urlText = (await discRes.text()).trim();
               if (urlText.startsWith('https://')) {
