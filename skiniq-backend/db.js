@@ -221,17 +221,66 @@ const db = {
         is_front_facing: !!scanData.isFrontFacing
       };
       
-      const { data, error } = await supabase
-        .from('scans')
-        .insert(payload)
-        .select()
-        .single();
-        
-      if (error) {
-        console.error('[SkinIQ] Supabase scan create error:', error.message);
-        throw error;
+      let retryPayload = { ...payload };
+      let attempt = 0;
+      const maxAttempts = 4;
+      let lastError = null;
+      let insertedData = null;
+
+      while (attempt < maxAttempts) {
+        const { data, error } = await supabase
+          .from('scans')
+          .insert(retryPayload)
+          .select()
+          .single();
+
+        if (!error) {
+          insertedData = data;
+          break;
+        }
+
+        lastError = error;
+        console.warn(`[SkinIQ] Supabase scan insert attempt ${attempt + 1} failed: ${error.message}`);
+
+        const errorMsg = error.message.toLowerCase();
+        let columnRemoved = false;
+
+        const columnsToCheck = ['detections', 'recommended_products', 'is_front_facing'];
+        for (const col of columnsToCheck) {
+          if (retryPayload[col] !== undefined && (errorMsg.includes(col.toLowerCase()) || errorMsg.includes(col.replace(/_/g, '')))) {
+            console.log(`[SkinIQ] Schema mismatch: stripping missing column '${col}' from scan payload and retrying...`);
+            delete retryPayload[col];
+            columnRemoved = true;
+            break;
+          }
+        }
+
+        if (!columnRemoved) {
+          if (retryPayload.detections !== undefined || retryPayload.recommended_products !== undefined || retryPayload.is_front_facing !== undefined) {
+            console.log('[SkinIQ] Schema mismatch: stripping all optional columns (detections, recommended_products, is_front_facing) and retrying...');
+            delete retryPayload.detections;
+            delete retryPayload.recommended_products;
+            delete retryPayload.is_front_facing;
+          } else {
+            break; // No more columns to strip
+          }
+        }
+
+        attempt++;
       }
-      return mapScan(data);
+
+      if (!insertedData) {
+        console.error('[SkinIQ] Supabase scan create failed permanently:', lastError ? lastError.message : 'Unknown error');
+        throw lastError || new Error('Database insert failed');
+      }
+
+      const createdRecord = mapScan(insertedData);
+      return {
+        ...createdRecord,
+        detections: scanData.detections || createdRecord.detections || [],
+        recommended_products: scanData.recommended_products || createdRecord.recommended_products || [],
+        isFrontFacing: scanData.isFrontFacing || createdRecord.isFrontFacing || false
+      };
     },
     
     deleteUserHistory: async (userId) => {
