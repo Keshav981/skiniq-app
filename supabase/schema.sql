@@ -23,6 +23,9 @@ create table public.scans (
     scores jsonb not null, -- { hydration: 72, texture: 80, pores: 55, ... }
     explanations jsonb not null, -- { hydration: "...", texture: "...", ... }
     general_summary text not null,
+    detections jsonb default '[]'::jsonb,
+    recommended_products jsonb default '[]'::jsonb,
+    is_front_facing boolean default false,
     created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
