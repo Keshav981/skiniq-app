@@ -102,7 +102,7 @@ const getDefaultBackendUrl = () => {
   if (Platform.OS === 'web') {
     // If running in production browser (e.g. Surge), use the public tunnel URL
     if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      return 'https://skiniq-api-2026-prod.loca.lt';
+      return 'https://dermaai-api-2026-prod.loca.lt';
     }
   }
   const hostUri = Constants.expoConfig?.hostUri;
@@ -145,6 +145,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const initialize = async () => {
       try {
+        // Migrate legacy AsyncStorage keys from SkinIQ to Derma AI
+        const legacyProfile = await AsyncStorage.getItem('@skiniq_profile');
+        if (legacyProfile) {
+          await AsyncStorage.setItem('@dermaai_profile', legacyProfile);
+          await AsyncStorage.removeItem('@skiniq_profile');
+        }
+        const legacyBackendUrl = await AsyncStorage.getItem('@skiniq_backend_url');
+        if (legacyBackendUrl) {
+          await AsyncStorage.setItem('@dermaai_backend_url', legacyBackendUrl);
+          await AsyncStorage.removeItem('@skiniq_backend_url');
+        }
+
         let activeUrl = getDefaultBackendUrl();
         const isProdWeb = Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
         let githubFetched = false;
@@ -152,25 +164,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Dynamically discover active backend URL from GitHub on web in production
         if (isProdWeb) {
           try {
-            console.log('[SkinIQ] Resolving dynamic backend URL from GitHub...');
+            console.log('[Derma AI] Resolving dynamic backend URL from GitHub...');
             const discRes = await fetch('https://raw.githubusercontent.com/Keshav981/skiniq-app/main/backend_url.txt?t=' + Date.now());
             if (discRes.ok) {
               const urlText = (await discRes.text()).trim();
               if (urlText.startsWith('https://')) {
                 activeUrl = urlText;
                 githubFetched = true;
-                console.log(`[SkinIQ] Dynamically discovered active backend URL: ${activeUrl}`);
+                console.log(`[Derma AI] Dynamically discovered active backend URL: ${activeUrl}`);
                 setBackendUrlState(activeUrl);
               }
             }
           } catch (discErr) {
-            console.warn('[SkinIQ] Dynamic backend URL discovery failed:', discErr);
+            console.warn('[Derma AI] Dynamic backend URL discovery failed:', discErr);
           }
         }
 
         // Only override with savedUrl if we didn't successfully fetch from GitHub in production web
         if (!githubFetched) {
-          const savedUrl = await AsyncStorage.getItem('@skiniq_backend_url');
+          const savedUrl = await AsyncStorage.getItem('@dermaai_backend_url');
           if (savedUrl) {
             // If the saved URL is a local LAN IP, check if the current Metro IP is different and update it
             const localIpRegex = /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
@@ -183,9 +195,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   const port = savedUrl.split(':').pop();
                   const portVal = port && !isNaN(Number(port)) ? port : '3000';
                   const newUrl = `http://${currentHostIp}:${portVal}`;
-                  console.log(`[SkinIQ] Dynamic host IP change detected: migrating backend URL from ${savedUrl} to ${newUrl}`);
+                  console.log(`[Derma AI] Dynamic host IP change detected: migrating backend URL from ${savedUrl} to ${newUrl}`);
                   activeUrl = newUrl;
-                  await AsyncStorage.setItem('@skiniq_backend_url', newUrl);
+                  await AsyncStorage.setItem('@dermaai_backend_url', newUrl);
                 } else {
                   activeUrl = savedUrl;
                 }
@@ -203,16 +215,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setBackendUrlState(activeUrl);
         }
 
-        const savedProfile = await AsyncStorage.getItem('@skiniq_profile');
+        const savedProfile = await AsyncStorage.getItem('@dermaai_profile');
         if (savedProfile) {
           const parsedProfile = JSON.parse(savedProfile);
           
           // Legacy check: if the profile ID is not a valid UUID, convert it and save it
           const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[0-9a-f]{12}$/i;
           if (!uuidRegex.test(parsedProfile.id)) {
-            console.log(`[SkinIQ] Legacy profile ID "${parsedProfile.id}" detected, migrating to UUID...`);
+            console.log(`[Derma AI] Legacy profile ID "${parsedProfile.id}" detected, migrating to UUID...`);
             parsedProfile.id = generateUUIDv4();
-            await AsyncStorage.setItem('@skiniq_profile', JSON.stringify(parsedProfile));
+            await AsyncStorage.setItem('@dermaai_profile', JSON.stringify(parsedProfile));
           }
           
           setProfile(parsedProfile);
@@ -232,7 +244,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setBackendUrl = async (url: string) => {
     setBackendUrlState(url);
-    await AsyncStorage.setItem('@skiniq_backend_url', url);
+    await AsyncStorage.setItem('@dermaai_backend_url', url);
   };
 
   const fetchUserData = async (userId: string, overrideUrl?: string) => {
@@ -243,10 +255,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         headers: { 'bypass-tunnel-reminder': 'true' }
       });
       if (profileRes.status === 404) {
-        const savedProfile = await AsyncStorage.getItem('@skiniq_profile');
+        const savedProfile = await AsyncStorage.getItem('@dermaai_profile');
         if (savedProfile) {
           const parsedProfile = JSON.parse(savedProfile);
-          console.log(`[SkinIQ] Syncing profile ${userId} to backend...`);
+          console.log(`[Derma AI] Syncing profile ${userId} to backend...`);
           await fetch(`${url}/api/profile`, {
             method: 'POST',
             headers: {
@@ -360,7 +372,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const saved = res.ok ? await res.json() : profilePayload;
       setProfile(saved);
-      await AsyncStorage.setItem('@skiniq_profile', JSON.stringify(saved));
+      await AsyncStorage.setItem('@dermaai_profile', JSON.stringify(saved));
       
       // Update subscription ID link
       setSubscription(prev => ({ ...prev, userId: saved.id }));
@@ -374,7 +386,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         : generateUUIDv4();
       const mockProfile: Profile = { id: fallbackId, name, ageRange, skinType, skinGoals };
       setProfile(mockProfile);
-      await AsyncStorage.setItem('@skiniq_profile', JSON.stringify(mockProfile));
+      await AsyncStorage.setItem('@dermaai_profile', JSON.stringify(mockProfile));
       return mockProfile;
     } finally {
       setLoading(false);
@@ -395,7 +407,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       const existingProfile = await res.json();
       setProfile(existingProfile);
-      await AsyncStorage.setItem('@skiniq_profile', JSON.stringify(existingProfile));
+      await AsyncStorage.setItem('@dermaai_profile', JSON.stringify(existingProfile));
       
       // Load user scans, subscriptions, and products tied to this profile
       await fetchUserData(existingProfile.id, backendUrl);
@@ -432,7 +444,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.status === 404) {
         const errJson = await res.clone().json();
         if (errJson.error === 'User profile not found') {
-          console.log(`[SkinIQ] User profile not found on backend. Syncing and retrying...`);
+          console.log(`[Derma AI] User profile not found on backend. Syncing and retrying...`);
           const syncRes = await fetch(`${backendUrl}/api/profile`, {
             method: 'POST',
             headers: {
@@ -552,7 +564,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Update local profile status
         const updatedProfile = { ...profile, subscriptionStatus: 'active' };
         setProfile(updatedProfile);
-        await AsyncStorage.setItem('@skiniq_profile', JSON.stringify(updatedProfile));
+        await AsyncStorage.setItem('@dermaai_profile', JSON.stringify(updatedProfile));
       }
     } catch (err) {
       console.error('Failed to buy subscription:', err);
@@ -594,7 +606,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       const resetProfile = { ...profile, skinGoals: [], skinType: null };
       setProfile(resetProfile);
-      await AsyncStorage.setItem('@skiniq_profile', JSON.stringify(resetProfile));
+      await AsyncStorage.setItem('@dermaai_profile', JSON.stringify(resetProfile));
       
       setLoading(false);
     }
