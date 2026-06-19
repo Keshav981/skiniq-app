@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "skiniq-app",
-    "slug": "skiniq-app",
+    "name": "Derma AI",
+    "slug": "derma-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "skiniqapp",
+    "scheme": "dermaai",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
