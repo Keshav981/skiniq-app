@@ -1282,8 +1282,31 @@ export default function AppIndex() {
                 placeholder="http://192.168.1.X:3000"
               />
               <Text style={styles.devHelpText}>
-                Use your machine's LAN IP when testing on a physical iOS device via Expo Go.
+                Use your machine's LAN IP or a public tunnel URL when testing.
               </Text>
+              <TouchableOpacity
+                style={styles.devSyncButton}
+                onPress={async () => {
+                  try {
+                    const res = await fetch('https://raw.githubusercontent.com/Keshav981/skiniq-app/main/backend_url.txt');
+                    if (res.ok) {
+                      const urlText = (await res.text()).trim();
+                      if (urlText.startsWith('https://')) {
+                        await setBackendUrl(urlText);
+                        Alert.alert('Synced!', `Backend URL updated to: ${urlText}`);
+                      } else {
+                        Alert.alert('Sync Failed', 'Fetched URL is invalid.');
+                      }
+                    } else {
+                      Alert.alert('Sync Failed', 'Failed to fetch from GitHub.');
+                    }
+                  } catch (err) {
+                    Alert.alert('Sync Error', 'Check your internet connection.');
+                  }
+                }}
+              >
+                <Text style={styles.devSyncButtonText}>Sync Active Tunnel from GitHub</Text>
+              </TouchableOpacity>
             </BlurView>
 
             {/* Privacy Actions */}
@@ -2491,6 +2514,19 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     marginTop: 6,
     lineHeight: 14
+  },
+  devSyncButton: {
+    backgroundColor: COLORS.roseDark,
+    borderRadius: 8,
+    paddingVertical: 10,
+    marginTop: 12,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  devSyncButtonText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600'
   },
   deleteButton: {
     backgroundColor: '#FFF',
