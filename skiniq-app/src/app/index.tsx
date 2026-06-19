@@ -1288,7 +1288,7 @@ export default function AppIndex() {
                 style={styles.devSyncButton}
                 onPress={async () => {
                   try {
-                    const res = await fetch('https://raw.githubusercontent.com/Keshav981/skiniq-app/main/backend_url.txt');
+                    const res = await fetch('https://raw.githubusercontent.com/Keshav981/skiniq-app/main/backend_url.txt?t=' + Date.now());
                     if (res.ok) {
                       const urlText = (await res.text()).trim();
                       if (urlText.startsWith('https://')) {
