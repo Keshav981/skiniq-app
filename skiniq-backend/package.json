@@ -1,5 +1,5 @@
 {
-  "name": "skiniq-backend",
+  "name": "derma-ai-backend",
   "version": "1.0.0",
   "description": "Express proxy backend for Claude Vision skin analysis and product catalog",
   "main": "server.js",
