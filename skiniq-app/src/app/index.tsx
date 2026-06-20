@@ -123,7 +123,7 @@ export default function AppIndex() {
   // Camera & Photo uploads
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [useCameraActive, setUseCameraActive] = useState(false);
-  const [savePhotosConsent, setSavePhotosConsent] = useState(false);
+  const [savePhotosConsent, setSavePhotosConsent] = useState(true);
   const [cameraGuideModal, setCameraGuideModal] = useState(false);
   const cameraRef = useRef<CameraView>(null);
   const [cameraFacing, setCameraFacing] = useState<'front' | 'back'>('front');
@@ -349,7 +349,7 @@ export default function AppIndex() {
         }
         if (base64Data) {
           setUseCameraActive(false);
-          setAnalyzingPhotoUri(`data:image/jpeg;base64,${base64Data}`);
+          setAnalyzingPhotoUri(base64Data.startsWith('data:image/') ? base64Data : `data:image/jpeg;base64,${base64Data}`);
           await uploadAndAnalyze(base64Data, isFront);
         } else {
           throw new Error('No picture data retrieved.');
@@ -386,7 +386,7 @@ export default function AppIndex() {
         }
         if (base64Img) {
           setAnalyzingPhotoIsFront(false);
-          setAnalyzingPhotoUri(`data:image/jpeg;base64,${base64Img}`);
+          setAnalyzingPhotoUri(base64Img.startsWith('data:image/') ? base64Img : `data:image/jpeg;base64,${base64Img}`);
           await uploadAndAnalyze(base64Img, false);
         } else {
           Alert.alert('Gallery Error', 'Selected file has no image data.');

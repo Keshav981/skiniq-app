@@ -486,7 +486,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Prepend to scan history
       setScans(prev => [newScan, ...prev]);
       setCurrentScanState(newScan);
-      setLastScanImageBase64('data:image/jpeg;base64,' + imageBase64);
+      setLastScanImageBase64(imageBase64.startsWith('data:image/') ? imageBase64 : 'data:image/jpeg;base64,' + imageBase64);
       
       // Compute product list matching lowest categories
       if (newScan.recommended_products && newScan.recommended_products.length > 0) {
