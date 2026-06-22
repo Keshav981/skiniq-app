@@ -28,7 +28,6 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const compressImageWeb = (uri: string): Promise<string> => {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
-    img.src = uri;
     img.onload = () => {
       const canvas = document.createElement('canvas');
       const MAX_WIDTH = 800;
@@ -61,6 +60,7 @@ const compressImageWeb = (uri: string): Promise<string> => {
       }
     };
     img.onerror = (err) => reject(err);
+    img.src = uri;
   });
 };
 
@@ -90,18 +90,18 @@ const getBase64FromUri = async (uri: string): Promise<string> => {
 
 // Color Palette (Warm Rose & Blush Tech Aesthetics)
 const COLORS = {
-  bgLight: '#FFFBF9',
+  bgLight: '#FAFAF8',
   bgCard: '#FFFFFF',
-  rosePrimary: '#F2A0A1',
-  roseDark: '#D87A7D',
-  roseLight: '#FCECEC',
-  roseMuted: '#E8C5C8',
+  rosePrimary: '#D4537E',
+  roseDark: '#A03054',
+  roseLight: '#FDF0F3',
+  roseMuted: '#E5A5B8',
   textDark: '#3C2F30',
   textMuted: '#8E7C7D',
   goldAccent: '#D4AF37',
   greenSuccess: '#6E9E80',
   glassBorder: '#F5E4E4',
-  shadowColor: 'rgba(216, 122, 125, 0.12)',
+  shadowColor: 'rgba(212, 83, 126, 0.12)',
   greyLight: '#F3EFEF'
 };
 
@@ -150,12 +150,13 @@ export default function AppIndex() {
   const [activeTab, setActiveTab] = useState<'camera' | 'insights' | 'journey' | 'products' | 'profile'>('camera');
   
   // Onboarding & Login states
-  const [onboardMode, setOnboardMode] = useState<'login' | 'register'>('login');
+  const [onboardStep, setOnboardStep] = useState<'welcome' | 'signin' | 'type' | 'goals' | 'age'>('welcome');
   const [loginNameInput, setLoginNameInput] = useState('');
   const [onboardName, setOnboardName] = useState('');
-  const [onboardAge, setOnboardAge] = useState('25-34');
+  const [onboardAge, setOnboardAge] = useState('26–35');
   const [onboardSkinType, setOnboardSkinType] = useState<string | null>('combination');
-  const [onboardGoals, setOnboardGoals] = useState<string[]>(['hydration', 'general_health']);
+  const [onboardGoals, setOnboardGoals] = useState<string[]>([]);
+  const [selectedPastScan, setSelectedPastScan] = useState<Scan | null>(null);
 
   const handleLogin = async () => {
     if (!loginNameInput.trim()) {
@@ -400,7 +401,7 @@ export default function AppIndex() {
         }
         if (base64Data) {
           setUseCameraActive(false);
-          setAnalyzingPhotoUri(photo.uri);
+          setAnalyzingPhotoUri(Platform.OS === 'web' ? 'data:image/jpeg;base64,' + base64Data : photo.uri);
           await uploadAndAnalyze(base64Data, isFront);
         } else {
           throw new Error('No picture data retrieved.');
@@ -441,7 +442,7 @@ export default function AppIndex() {
         }
         if (base64Img) {
           setAnalyzingPhotoIsFront(false);
-          setAnalyzingPhotoUri(pickerResult.assets[0].uri);
+          setAnalyzingPhotoUri(Platform.OS === 'web' ? 'data:image/jpeg;base64,' + base64Img : pickerResult.assets[0].uri);
           await uploadAndAnalyze(base64Img, false);
         } else {
           Alert.alert('Gallery Error', 'Selected file has no image data.');
@@ -451,6 +452,51 @@ export default function AppIndex() {
       setIsAnalyzing(false);
       Alert.alert('Gallery Error', 'Failed to retrieve image: ' + e.message);
     }
+  };
+
+  const openCameraWeb = () => {
+    if (typeof document === 'undefined') return;
+
+    let input = document.getElementById('web-camera-input') as HTMLInputElement | null;
+    if (!input) {
+      input = document.createElement('input');
+      input.id = 'web-camera-input';
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.setAttribute('capture', 'user');
+      input.style.display = 'none';
+      document.body.appendChild(input);
+    }
+
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        try {
+          setAnalysisProgressMsg('Reading camera photo...');
+          setIsAnalyzing(true);
+
+          const objectUrl = URL.createObjectURL(file);
+          setAnalyzingPhotoIsFront(true);
+          setAnalyzingPhotoUri(objectUrl);
+
+          const base64Img = await getBase64FromUri(objectUrl);
+          if (base64Img) {
+            setAnalyzingPhotoUri('data:image/jpeg;base64,' + base64Img);
+            await uploadAndAnalyze(base64Img, true);
+          } else {
+            Alert.alert('Camera Error', 'Could not read image data.');
+            setIsAnalyzing(false);
+          }
+
+          URL.revokeObjectURL(objectUrl);
+        } catch (err: any) {
+          setIsAnalyzing(false);
+          Alert.alert('Camera Error', 'Failed to process image: ' + err.message);
+        }
+      }
+    };
+
+    input.click();
   };
 
   const uploadAndAnalyze = async (base64Img: string, isFront: boolean) => {
@@ -470,10 +516,10 @@ export default function AppIndex() {
       setAnalysisProgressMsg('Generating recommendations...');
       setActiveTab('insights');
     } catch (err: any) {
-      if (err.message.includes('Subscription required') || err.message.includes('403')) {
+      if (err?.message?.includes('Subscription required') || err?.message?.includes('403')) {
         setPaywallVisible(true);
       } else {
-        Alert.alert('Analysis Failed', err.message || 'Server did not return a valid response. Please retry.');
+        Alert.alert('Analysis Failed', err?.message || 'Server did not return a valid response. Please retry.');
       }
     } finally {
       setIsAnalyzing(false);
@@ -592,14 +638,15 @@ export default function AppIndex() {
     );
   };
 
-  // 1. Onboarding UI (If no profile yet)
+  // Onboarding screens (if profile is null)
   if (!profile) {
     const goalsList = [
-      { id: 'hydration', label: 'Hydration & Dewiness', icon: '💧' },
-      { id: 'anti-aging', label: 'Anti-Aging & Fine Lines', icon: '🌸' },
-      { id: 'brightening', label: 'Brightening & Even Tone', icon: '🎭' },
-      { id: 'pores', label: 'Pore Clarifying', icon: '🔍' },
-      { id: 'general_health', label: 'General Skin Barrier Health', icon: '🛡️' }
+      { id: 'Acne', label: 'Acne & Congestion', icon: '🔍' },
+      { id: 'Brightening', label: 'Brightening', icon: '✨' },
+      { id: 'Anti-aging', label: 'Anti-aging', icon: '🌸' },
+      { id: 'Hydration', label: 'Hydration', icon: '💧' },
+      { id: 'Even tone', label: 'Even tone', icon: '🎭' },
+      { id: 'General health', label: 'General health', icon: '🛡️' }
     ];
 
     const toggleGoal = (goalId: string) => {
@@ -610,175 +657,284 @@ export default function AppIndex() {
       }
     };
 
-    return (
-      <SafeAreaView style={styles.onboardContainer}>
-        <ScrollView contentContainerStyle={styles.onboardScroll}>
-          <View style={styles.onboardHeaderContainer}>
-            <Text style={styles.logoText}>Derma AI</Text>
-            <Text style={styles.subtitleText}>Your AI Beauty-Tech Companion</Text>
-          </View>
+    const renderProgressBar = (step: number) => {
+      const pct = step === 1 ? '33%' : step === 2 ? '66%' : '100%';
+      return (
+        <View style={styles.progressBarContainer}>
+          <View style={[styles.progressBarFill, { width: pct }]} />
+          <Text style={styles.progressBarText}>Step {step} of 3</Text>
+        </View>
+      );
+    };
 
-          <BlurView intensity={75} tint="light" style={styles.onboardCard}>
-            {/* Elegant glassmorphic authentication tabs */}
-            <View style={styles.authTabsRow}>
-              <TouchableOpacity
-                style={[styles.authTab, onboardMode === 'login' && styles.authTabActive]}
-                onPress={() => setOnboardMode('login')}
-              >
-                <Text style={[styles.authTabText, onboardMode === 'login' && styles.authTabActiveText]}>Sign In</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.authTab, onboardMode === 'register' && styles.authTabActive]}
-                onPress={() => setOnboardMode('register')}
-              >
-                <Text style={[styles.authTabText, onboardMode === 'register' && styles.authTabActiveText]}>New Profile</Text>
-              </TouchableOpacity>
+    // Screen 1: Splash / Welcome
+    if (onboardStep === 'welcome') {
+      return (
+        <SafeAreaView style={[styles.onboardContainer, { backgroundColor: COLORS.bgLight }]}>
+          <View style={styles.splashContent}>
+            {/* DermaAI Logo & Wordmark */}
+            <View style={styles.logoBadgeContainer}>
+              <View style={styles.logoBadgeCircle}>
+                <Text style={{ fontSize: 36 }}>🌿</Text>
+              </View>
+              <Text style={styles.splashLogoText}>DermaAI</Text>
+            </View>
+            
+            <Text style={styles.splashTagline}>Know your skin. Transform it.</Text>
+            
+            <View style={styles.splashInputWrapper}>
+              <Text style={styles.splashInputLabel}>What should we call you?</Text>
+              <TextInput
+                style={styles.splashTextInput}
+                value={onboardName}
+                onChangeText={setOnboardName}
+                placeholder="Enter your name"
+                placeholderTextColor={COLORS.textMuted}
+                autoCapitalize="words"
+              />
             </View>
 
-            {onboardMode === 'login' ? (
-              <View>
-                <Text style={styles.sectionHeader}>Welcome Back</Text>
-                
-                <Text style={styles.inputLabel}>Registered Name</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={loginNameInput}
-                  onChangeText={setLoginNameInput}
-                  placeholder="Enter your name to sign in"
-                  placeholderTextColor={COLORS.textMuted}
-                  autoCapitalize="words"
-                />
+            <TouchableOpacity 
+              style={[styles.splashCTA, { backgroundColor: COLORS.rosePrimary }]} 
+              onPress={() => {
+                if (!onboardName.trim()) {
+                  Alert.alert('Name Required', 'Please tell us your name to personalize your skincare journey.');
+                  return;
+                }
+                setOnboardStep('type');
+              }}
+            >
+              <Text style={styles.splashCTAText}>Get Started</Text>
+            </TouchableOpacity>
 
-                <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
-                  <Text style={styles.primaryButtonText}>Sign In</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View>
-                <Text style={styles.sectionHeader}>Tell us about yourself</Text>
-                
-                <Text style={styles.inputLabel}>Name</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={onboardName}
-                  onChangeText={setOnboardName}
-                  placeholder="Enter your name"
-                  placeholderTextColor={COLORS.textMuted}
-                  autoCapitalize="words"
-                />
-      
-                <Text style={styles.inputLabel}>Age Group</Text>
-                <View style={styles.chipRow}>
-                  {['18-24', '25-34', '35-44', '45+'].map(age => (
-                    <TouchableOpacity
-                      key={age}
-                      style={[styles.chip, onboardAge === age && styles.chipActive]}
-                      onPress={() => setOnboardAge(age)}
-                    >
-                      <Text style={[styles.chipText, onboardAge === age && styles.chipTextActive]}>{age}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-      
-                <Text style={styles.inputLabel}>Skin Type Self-Assessment (Optional)</Text>
-                <View style={styles.chipRow}>
-                  {[
-                    { id: 'dry', label: 'Dry' },
-                    { id: 'oily', label: 'Oily' },
-                    { id: 'combination', label: 'Combination' },
-                    { id: 'sensitive', label: 'Sensitive' }
-                  ].map(type => (
-                    <TouchableOpacity
-                      key={type.id}
-                      style={[styles.chip, onboardSkinType === type.id && styles.chipActive]}
-                      onPress={() => setOnboardSkinType(type.id)}
-                    >
-                      <Text style={[styles.chipText, onboardSkinType === type.id && styles.chipTextActive]}>{type.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-      
-                <Text style={styles.inputLabel}>Skin Goals (Select Multiples)</Text>
-                {goalsList.map(goal => {
-                  const selected = onboardGoals.includes(goal.id);
-                  return (
-                    <TouchableOpacity
-                      key={goal.id}
-                      style={[styles.goalSelectCard, selected && styles.goalSelectCardActive]}
-                      onPress={() => toggleGoal(goal.id)}
-                    >
-                      <Text style={goal.id === 'hydration' ? styles.goalSelectIcon : { fontSize: 20, marginRight: 12 }}>{goal.icon}</Text>
-                      <Text style={[styles.goalSelectLabel, selected && styles.goalSelectLabelActive]}>{goal.label}</Text>
-                      <View style={[styles.checkbox, selected && styles.checkboxChecked]} />
-                    </TouchableOpacity>
-                  );
-                })}
-      
-                <TouchableOpacity style={styles.primaryButton} onPress={handleStartOnboarding}>
-                  <Text style={styles.primaryButtonText}>Continue to Skin Check</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </BlurView>
-        </ScrollView>
-      </SafeAreaView>
-    );
+            <TouchableOpacity 
+              style={styles.splashLink} 
+              onPress={() => setOnboardStep('signin')}
+            >
+              <Text style={styles.splashLinkText}>Already have an account? Sign in</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      );
+    }
+
+    // Sign In View
+    if (onboardStep === 'signin') {
+      return (
+        <SafeAreaView style={[styles.onboardContainer, { backgroundColor: COLORS.bgLight }]}>
+          <View style={styles.splashContent}>
+            <Text style={styles.onboardHeading}>Welcome Back</Text>
+            <Text style={styles.onboardSubheading}>Sign in with your registered name to restore your journey.</Text>
+            
+            <View style={styles.splashInputWrapper}>
+              <Text style={styles.splashInputLabel}>Registered Name</Text>
+              <TextInput
+                style={styles.splashTextInput}
+                value={loginNameInput}
+                onChangeText={setLoginNameInput}
+                placeholder="Enter your name"
+                placeholderTextColor={COLORS.textMuted}
+                autoCapitalize="words"
+              />
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.splashCTA, { backgroundColor: COLORS.rosePrimary }]} 
+              onPress={handleLogin}
+            >
+              <Text style={styles.splashCTAText}>Sign In</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.splashLink} 
+              onPress={() => setOnboardStep('welcome')}
+            >
+              <Text style={styles.splashLinkText}>Back to welcome</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      );
+    }
+
+    // Screen 2: Onboarding - Skin Type
+    if (onboardStep === 'type') {
+      const typeList = [
+        { id: 'oily', label: 'Oily', desc: 'Excess sebum, shiny T-zone, enlarged pores', icon: '💧' },
+        { id: 'dry', label: 'Dry', desc: 'Tightness, flaking, dullness, needs hydration', icon: '🌵' },
+        { id: 'combination', label: 'Combination', desc: 'Oily T-zone, dry/normal cheeks', icon: '🎭' },
+        { id: 'sensitive', label: 'Sensitive', desc: 'Redness, irritation, reacts to actives', icon: '🌸' }
+      ];
+
+      return (
+        <SafeAreaView style={[styles.onboardContainer, { backgroundColor: COLORS.bgLight }]}>
+          <ScrollView contentContainerStyle={styles.onboardScroll}>
+            {renderProgressBar(1)}
+            <Text style={styles.onboardHeading}>What's your skin type?</Text>
+            <Text style={styles.onboardSubheading}>We'll personalise your analysis.</Text>
+
+            <View style={styles.typeGrid}>
+              {typeList.map((item) => {
+                const isSelected = onboardSkinType === item.id;
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    activeOpacity={0.9}
+                    style={[styles.typeCard, isSelected && styles.typeCardSelected]}
+                    onPress={() => setOnboardSkinType(item.id)}
+                  >
+                    <Text style={styles.typeCardIcon}>{item.icon}</Text>
+                    <Text style={styles.typeCardLabel}>{item.label}</Text>
+                    <Text style={styles.typeCardDesc}>{item.desc}</Text>
+                    {isSelected && (
+                      <View style={styles.typeCheckBadge}>
+                        <Text style={styles.typeCheckText}>✓</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.primaryButton, { backgroundColor: COLORS.rosePrimary }]} 
+              onPress={() => setOnboardStep('goals')}
+            >
+              <Text style={styles.primaryButtonText}>Continue</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      );
+    }
+
+    // Screen 3: Onboarding - Skin Goals
+    if (onboardStep === 'goals') {
+      return (
+        <SafeAreaView style={[styles.onboardContainer, { backgroundColor: COLORS.bgLight }]}>
+          <ScrollView contentContainerStyle={styles.onboardScroll}>
+            {renderProgressBar(2)}
+            <Text style={styles.onboardHeading}>What are your skin goals?</Text>
+            <Text style={styles.onboardSubheading}>Pick all that apply.</Text>
+
+            <View style={styles.goalsPillWrapper}>
+              {goalsList.map((goal) => {
+                const isSelected = onboardGoals.includes(goal.id);
+                return (
+                  <TouchableOpacity
+                    key={goal.id}
+                    style={[styles.goalPill, isSelected && styles.goalPillSelected]}
+                    onPress={() => toggleGoal(goal.id)}
+                  >
+                    <Text style={[styles.goalPillText, isSelected && styles.goalPillTextSelected]}>
+                      {goal.icon} {goal.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.primaryButton, { backgroundColor: COLORS.rosePrimary }]} 
+              onPress={() => setOnboardStep('age')}
+            >
+              <Text style={styles.primaryButtonText}>Continue</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      );
+    }
+
+    // Screen 4: Onboarding - Age Range
+    if (onboardStep === 'age') {
+      const ageGroups = ['Under 18', '18–25', '26–35', '36–45', '45+'];
+
+      return (
+        <SafeAreaView style={[styles.onboardContainer, { backgroundColor: COLORS.bgLight }]}>
+          <ScrollView contentContainerStyle={styles.onboardScroll}>
+            {renderProgressBar(3)}
+            <Text style={styles.onboardHeading}>Your age range?</Text>
+
+            <View style={styles.ageListContainer}>
+              {ageGroups.map((age) => {
+                const isSelected = onboardAge === age;
+                return (
+                  <TouchableOpacity
+                    key={age}
+                    activeOpacity={0.8}
+                    style={[styles.ageRowCard, isSelected && styles.ageRowCardSelected]}
+                    onPress={() => setOnboardAge(age)}
+                  >
+                    <Text style={styles.ageRowText}>{age}</Text>
+                    <View style={[styles.radioCircle, isSelected && styles.radioCircleChecked]}>
+                      {isSelected && <View style={styles.radioDot} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.primaryButton, { backgroundColor: COLORS.rosePrimary, marginTop: 40 }]} 
+              onPress={handleStartOnboarding}
+            >
+              <Text style={styles.primaryButtonText}>Start my skin journey →</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      );
+    }
   }
 
-  // Loading / Analyzing overlay
+  // Screen 6: Analysis Loading
   if (isAnalyzing) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingTitle}>Analyzing Your Skin...</Text>
-        <Text style={styles.loadingSubtitle}>{statusMessages[activeStatusIndex]}</Text>
-        
-        <View style={styles.scannerWrapper}>
-          {analyzingPhotoUri ? (
-            <Image 
-              source={{ uri: analyzingPhotoUri }} 
-              style={[styles.scannerImage, analyzingPhotoIsFront && { transform: [{ scaleX: -1 }] }]} 
-              resizeMode="cover" 
-            />
-          ) : (
-            <View style={styles.scannerImagePlaceholder}>
-              <ActivityIndicator size="large" color={COLORS.rosePrimary} />
-              <Text style={{ color: COLORS.textMuted, marginTop: 12 }}>Initializing Scanner...</Text>
+      <SafeAreaView style={[styles.loadingContainer, { backgroundColor: COLORS.bgLight }]}>
+        <View style={styles.loadingInnerContent}>
+          {/* Animated Circular Progress Ring with Silhouette Icon */}
+          <View style={styles.loadingRingWrapper}>
+            <Animated.View 
+              style={[
+                styles.loadingRingOuter,
+                {
+                  transform: [{
+                    rotate: scanAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0deg', '360deg']
+                    })
+                  }]
+                }
+              ]}
+            >
+              <LinearGradient
+                colors={[COLORS.rosePrimary, '#FAFAF8']}
+                style={styles.loadingRingGradient}
+              />
+            </Animated.View>
+            <View style={styles.loadingRingSilhouette}>
+              <Text style={{ fontSize: 44 }}>👤</Text>
             </View>
-          )}
-          
-          {/* Laser Line */}
-          <Animated.View 
-            style={[
-              styles.laserLine, 
-              {
-                top: scanAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', '98%']
-                })
-              }
-            ]} 
-          />
-          
-          {/* Pulsing Scanning dots */}
-          {analyzingPhotoUri && (
-            <>
-              {/* Forehead */}
-              <Animated.View style={[styles.pulseDot, { left: '50%', top: '22%', opacity: pulseAnim }]} />
-              {/* Nose */}
-              <Animated.View style={[styles.pulseDot, { left: '50%', top: '50%', opacity: pulseAnim }]} />
-              {/* Left Cheek */}
-              <Animated.View style={[styles.pulseDot, { left: analyzingPhotoIsFront ? '70%' : '30%', top: '60%', opacity: pulseAnim }]} />
-              {/* Right Cheek */}
-              <Animated.View style={[styles.pulseDot, { left: analyzingPhotoIsFront ? '30%' : '70%', top: '58%', opacity: pulseAnim }]} />
-            </>
-          )}
+          </View>
+
+          <Text style={styles.loadingMainTitle}>Analysing your skin...</Text>
+
+          {/* Sequential Status Lines */}
+          <View style={styles.statusLinesList}>
+            <Text style={[styles.statusLineItem, { opacity: 1 }]}>
+              ✓ Reading hydration levels
+            </Text>
+            <Text style={[styles.statusLineItem, { opacity: activeStatusIndex >= 1 ? 1 : 0.3 }]}>
+              {activeStatusIndex >= 1 ? '✓' : '•'} Mapping texture & tone
+            </Text>
+            <Text style={[styles.statusLineItem, { opacity: activeStatusIndex >= 2 ? 1 : 0.3 }]}>
+              {activeStatusIndex >= 2 ? '✓' : '•'} Building your skin profile
+            </Text>
+          </View>
+
+          {/* Bottom Disclaimer */}
+          <Text style={styles.loadingDisclaimer}>
+            Cosmetic assessment only — not a medical diagnosis.
+          </Text>
         </View>
-        
-        <ActivityIndicator size="small" color={COLORS.roseDark} style={{ marginTop: 24 }} />
-        <Text style={styles.disclaimerTextSmall}>
-          This assessment represents cosmetic evaluation and does not constitute medical advice.
-        </Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -796,10 +952,13 @@ export default function AppIndex() {
 
   return (
     <LinearGradient
-      colors={['#FFF5F5', '#FFEAEA', '#F3E5F5', '#FFFBF9']}
+      colors={['#FFF5F7', '#FAFAF8']}
       style={styles.container}
     >
-      {/* Dynamic Header */}
+      {/* Screen 10 details popup */}
+      {renderScanDetailPopup()}
+
+      {/* Dynamic Header on main screens */}
       <SafeAreaView edges={['top']} style={styles.header}>
         <View style={styles.headerRow}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -807,7 +966,7 @@ export default function AppIndex() {
               <Text style={styles.headerAvatarText}>{profile.name ? profile.name.charAt(0).toUpperCase() : 'U'}</Text>
             </View>
             <View style={{ marginLeft: 10 }}>
-              <Text style={styles.headerLogo}>Derma AI</Text>
+              <Text style={styles.headerLogo}>DermaAI</Text>
               <Text style={styles.headerWelcome}>Hello, {profile.name}</Text>
             </View>
           </View>
@@ -820,7 +979,7 @@ export default function AppIndex() {
               if (subscription.status !== 'active') setPaywallVisible(true);
             }}
           >
-            <Text style={styles.badgeText}>
+            <Text style={[styles.badgeText, subscription.status === 'active' && { color: COLORS.rosePrimary }]}>
               {subscription.status === 'active' ? 'PRO MEMBER' : 'FREE ACCOUNT'}
             </Text>
           </TouchableOpacity>
@@ -829,322 +988,160 @@ export default function AppIndex() {
 
       {/* Main Tab Screen Switcher */}
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* CAMERA TAB */}
+        {/* SCAN TAB (Screen 5) */}
         {activeTab === 'camera' && (
-          <View style={styles.tabContentContainer}>
-            {useCameraActive ? (
+          <View style={{ padding: 0 }}>
+            {useCameraActive && cameraPermission && cameraPermission.granted ? (
               <View style={styles.cameraBoxContainer}>
-                {cameraPermission && cameraPermission.granted ? (
-                  <View style={styles.cameraFrame}>
-                    <CameraView ref={cameraRef} facing={cameraFacing} style={StyleSheet.absoluteFillObject}>
-                      {/* Face guide overlay */}
-                      <View style={styles.overlayGuideContainer}>
-                        <View style={styles.overlayGuideCutout} />
-                        <Text style={styles.cameraOverlayTip}>Position face inside guide</Text>
-                      </View>
-                    </CameraView>
-                    
-                    {/* Capture button controls */}
-                    <View style={styles.cameraControlsRow}>
-                      <TouchableOpacity style={styles.secondaryRoundBtn} onPress={() => setUseCameraActive(false)}>
-                        <Text style={styles.btnIcon}>✕</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.captureButtonOuter} onPress={capturePhoto}>
-                        <View style={styles.captureButtonInner} />
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.secondaryRoundBtn} 
-                        onPress={() => setCameraFacing(prev => prev === 'front' ? 'back' : 'front')}
-                      >
-                        <Text style={styles.btnIcon}>🔄</Text>
-                      </TouchableOpacity>
-                    </View>
+                <CameraView ref={cameraRef} facing={cameraFacing} style={StyleSheet.absoluteFillObject}>
+                  {/* Face guide overlay */}
+                  <View style={styles.overlayGuideContainer}>
+                    <View style={styles.overlayGuideCutout} />
+                    <Text style={styles.cameraOverlayTip}>Position face inside guide</Text>
                   </View>
-                ) : (
-                  <View style={styles.permissionErrorCard}>
-                    <Text style={styles.paragraphCenter}>Camera permissions are required to operate scan diagnostics.</Text>
-                    <TouchableOpacity style={styles.outlineButton} onPress={handleCameraPermissionRequest}>
-                      <Text style={styles.outlineButtonText}>Grant Camera Access</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                </CameraView>
+                
+                {/* Capture button controls */}
+                <View style={styles.cameraControlsRow}>
+                  <TouchableOpacity style={styles.secondaryRoundBtn} onPress={() => setUseCameraActive(false)}>
+                    <Text style={styles.btnIcon}>✕</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.captureButtonOuter} onPress={capturePhoto}>
+                    <View style={styles.captureButtonInner} />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.secondaryRoundBtn} 
+                    onPress={() => setCameraFacing(prev => prev === 'front' ? 'back' : 'front')}
+                  >
+                    <Text style={styles.btnIcon}>🔄</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
-              <View style={styles.unifiedPageLayout}>
-                {/* 2026 Sleek Dermal Forecast Widget - Replaces lady image */}
-                <BlurView intensity={65} tint="light" style={styles.forecastWidget}>
-                  <View style={styles.forecastHeader}>
-                    <Text style={styles.forecastGreeting}>{getGreeting()}</Text>
-                    <Text style={styles.forecastTitle}>Today's Dermal Forecast</Text>
-                    <View style={styles.envSwitcher}>
-                      {(['outdoor', 'office', 'dry'] as const).map((env) => (
-                        <TouchableOpacity
-                          key={env}
-                          style={[
-                            styles.envSwitchBtn,
-                            envContext === env && styles.envSwitchBtnActive
-                          ]}
-                          onPress={() => setEnvContext(env)}
-                        >
-                          <Text
-                            style={[
-                              styles.envSwitchText,
-                              envContext === env && styles.envSwitchTextActive
-                            ]}
-                          >
-                            {env === 'outdoor' ? '☀️ Out' : env === 'office' ? '🏢 In' : '🌵 Dry'}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-
-                  <View style={styles.forecastStatsRow}>
-                    <View style={styles.forecastStatItem}>
-                      <Text style={styles.forecastStatLabel}>UV INDEX</Text>
-                      <Text style={[styles.forecastStatValue, { color: envData[envContext].uvColor }]}>
-                        {envData[envContext].uv}
-                      </Text>
-                    </View>
-                    <View style={styles.forecastStatDivider} />
-                    <View style={styles.forecastStatItem}>
-                      <Text style={styles.forecastStatLabel}>HUMIDITY</Text>
-                      <Text style={styles.forecastStatValue}>{envData[envContext].humidity}</Text>
-                    </View>
-                    <View style={styles.forecastStatDivider} />
-                    <View style={styles.forecastStatItem}>
-                      <Text style={styles.forecastStatLabel}>AIR QUALITY</Text>
-                      <Text style={styles.forecastStatValue}>{envData[envContext].aqi}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.forecastAlertBox}>
-                    <View style={styles.forecastAlertBadge}>
-                      <Text style={styles.forecastAlertBadgeText}>
-                        🛡️ {envData[envContext].barrierStatus}
-                      </Text>
-                    </View>
-                    <Text style={styles.forecastAlertTip}>{envData[envContext].tip}</Text>
-                  </View>
-                </BlurView>
-
-                {/* Dermal Diagnostics Unified Scan Deck */}
-                <BlurView intensity={70} tint="light" style={styles.unifiedScanDeck}>
-                  <Text style={styles.deckTitle}>Dermal Scanner Control Deck</Text>
-                  <Text style={styles.deckSubtitle}>
-                    Position yourself in natural light and capture or upload a high-resolution selfie to trigger the AI visual analysis.
-                  </Text>
-
-                  {/* Vertical camera & gallery launch actions */}
-                  <View style={styles.deckActionsList}>
-                    <TouchableOpacity
-                      style={styles.deckActionRowBtn}
-                      onPress={() => setUseCameraActive(true)}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={styles.deckActionRowIcon}>📸</Text>
-                        <View style={{ marginLeft: 12 }}>
-                          <Text style={styles.deckActionRowTitle}>Open Dermal Camera</Text>
-                          <Text style={styles.deckActionRowDesc}>Take a live photo for active scanning</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.deckActionRowChevron}>➔</Text>
+              // Screen 5: Camera Viewfinder (Simulated on Web, or launcher on Native)
+              <View style={styles.darkCameraViewfinder}>
+                {/* Viewfinder simulated crop background */}
+                <View style={styles.viewfinderDarkBackground}>
+                  {/* Glowing Pulse Oval Guide */}
+                  <View style={styles.ovalGuideViewfinder} />
+                  
+                  {/* Top Bar controls */}
+                  <View style={styles.viewfinderTopControls}>
+                    <TouchableOpacity style={styles.viewfinderControlBtn} onPress={() => setActiveTab('insights')}>
+                      <Text style={styles.viewfinderControlIcon}>✕</Text>
                     </TouchableOpacity>
-
-                    <View style={styles.deckActionDivider} />
-
-                    <TouchableOpacity
-                      style={styles.deckActionRowBtn}
-                      onPress={selectPhotoFromGallery}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={styles.deckActionRowIcon}>🖼️</Text>
-                        <View style={{ marginLeft: 12 }}>
-                          <Text style={styles.deckActionRowTitle}>Import Skin Photo</Text>
-                          <Text style={styles.deckActionRowDesc}>Select a photo from your gallery</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.deckActionRowChevron}>➔</Text>
+                    <TouchableOpacity style={styles.viewfinderControlBtn} onPress={() => Alert.alert('Flash', 'Flash toggle triggered.')}>
+                      <Text style={styles.viewfinderControlIcon}>⚡</Text>
                     </TouchableOpacity>
                   </View>
 
-                  <View style={styles.deckDivider} />
-
-                  {/* Inline Consent Control */}
-                  <View style={styles.deckConsentRow}>
-                    <View style={{ flex: 1, marginRight: 16 }}>
-                      <Text style={styles.deckConsentTitle}>In-Memory Processing Consent</Text>
-                      <Text style={styles.deckConsentDesc}>
-                        Photos are processed in-memory and immediately discarded. We never save raw photos on our servers.
-                      </Text>
-                    </View>
-                    <Switch
-                      value={!savePhotosConsent}
-                      onValueChange={(val) => setSavePhotosConsent(!val)}
-                      trackColor={{ false: COLORS.greyLight, true: COLORS.roseLight }}
-                      thumbColor={!savePhotosConsent ? COLORS.rosePrimary : '#FFF'}
-                    />
+                  {/* Floating Tip Pill */}
+                  <View style={styles.floatingTipPill}>
+                    <Text style={styles.floatingTipText}>Face a window  ·  No filters  ·  Natural light</Text>
                   </View>
 
-                  <View style={styles.deckDivider} />
+                  {/* Bottom Controls */}
+                  <View style={styles.viewfinderBottomRow}>
+                    {/* Last Scan Thumbnail */}
+                    <TouchableOpacity 
+                      style={styles.lastScanThumbBtn}
+                      onPress={() => {
+                        if (scans.length > 0) {
+                          setSelectedPastScan(scans[0]);
+                        } else {
+                          Alert.alert('No Scan', 'Complete a skin scan first.');
+                        }
+                      }}
+                    >
+                      {scans.length > 0 && lastScanImageBase64 ? (
+                        <Image source={{ uri: lastScanImageBase64 }} style={styles.lastScanThumbImg} />
+                      ) : (
+                        <View style={[styles.lastScanThumbImg, { backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }]}>
+                          <Text style={{ fontSize: 16 }}>👤</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
 
-                  {/* Tips & Recommendations inside the deck */}
-                  <View style={styles.deckTipsSection}>
-                    <Text style={styles.deckTipsTitle}>💡 Tips for Optimal Diagnostics:</Text>
-                    <Text style={styles.deckTipsItem}>• Stand facing a window for bright, natural daylight.</Text>
-                    <Text style={styles.deckTipsItem}>• Hold the camera at eye level, relax your expression, and hold steady.</Text>
-                    <Text style={styles.deckTipsItem}>• Clean your camera lens to avoid oil smudges affecting analysis.</Text>
+                    {/* Circular Capture Button */}
+                    <TouchableOpacity 
+                      style={styles.circularCaptureBtnOuter}
+                      onPress={() => {
+                        if (Platform.OS === 'web') {
+                          openCameraWeb();
+                        } else {
+                          setUseCameraActive(true);
+                        }
+                      }}
+                    >
+                      <View style={styles.circularCaptureBtnInner} />
+                    </TouchableOpacity>
+
+                    {/* Spacer to balance last scan thumbnail */}
+                    <View style={styles.lastScanThumbBtnPlaceholder} />
                   </View>
-                </BlurView>
 
-                {/* Medical Disclaimer Banner */}
-                <View style={styles.disclaimerContainer}>
-                  <Text style={styles.disclaimerText}>
-                    ⚠️ Cosmetic Assessment Disclaimer: This is an aesthetic visual analysis. It does not provide medical skin diagnosis or health prescriptions. If you have concerns about skin pathology or health, consult a dermatologist.
-                  </Text>
+                  {/* Upload photo instead link */}
+                  <TouchableOpacity 
+                    style={styles.uploadInsteadBtn}
+                    onPress={selectPhotoFromGallery}
+                  >
+                    <Text style={styles.uploadInsteadText}>Upload photo instead</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             )}
           </View>
         )}
 
-        {/* INSIGHTS TAB */}
+        {/* INSIGHTS TAB (Screen 7) */}
         {activeTab === 'insights' && (
           <View style={styles.tabContentContainer}>
-            {currentScan ? (
+            {scans.length > 0 && currentScan ? (
               <View>
-                {/* Redesigned unified insights layout - no blocky nested cards, modern 2026 UI */}
-                <View style={styles.unifiedPageLayout}>
-                  <Text style={styles.scanDateHeader}>
-                    Assessment Report • {new Date(currentScan.createdAt).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric'
-                    })}
-                  </Text>
-                  
-                  {/* Central Glassmorphic Gauge Panel */}
-                  <View style={styles.unifiedGaugeContainer}>
-                    <View style={styles.circularGauge}>
-                      <LinearGradient
-                        colors={[COLORS.rosePrimary, COLORS.roseDark]}
-                        style={styles.circularGaugeGradient}
-                      >
-                        <View style={styles.circularGaugeInner}>
-                          <Text style={styles.gaugeScoreText}>{currentScan.scores.overall}</Text>
-                          <Text style={styles.gaugeScoreLabel}>Overall Index</Text>
-                        </View>
-                      </LinearGradient>
-                    </View>
-
-                    <View style={styles.primaryConcernBadge}>
-                      <Text style={styles.primaryConcernText}>
-                        🎯 Focus Zone: {getPrimaryConcern(currentScan.scores)}
-                      </Text>
-                    </View>
-                  </View>
- 
-                  <Text style={styles.generalSummaryText}>{currentScan.general_summary}</Text>
-                </View>
-
-                {/* Interactive Face Map Coordinates Overlay - Clean inline layout */}
-                <View style={styles.unifiedMapLayout}>
-                  <Text style={styles.faceMapTitle}>Localized Concerns Map</Text>
-                  <Text style={styles.faceMapSubtitle}>Tap scanning targets on your face map below</Text>
-                  
-                  <View style={styles.facePhotoWrapper}>
-                    <Image
-                      source={{
-                        uri: currentScan.imageUrl || lastScanImageBase64 || 'https://images.unsplash.com/photo-1590156546746-c599f5244cd7?auto=format&fit=crop&w=600&q=80'
-                      }}
-                      style={[styles.facePhotoImg, currentScan.isFrontFacing && { transform: [{ scaleX: -1 }] }]}
-                      resizeMode="cover"
-                    />
-                    
-                    {/* High-tech diagnostic grid overlay lines */}
-                    <View style={styles.scanGridOverlay} pointerEvents="none">
-                      <View style={styles.scanGridRow} />
-                      <View style={styles.scanGridRow} />
-                      <View style={styles.scanGridRow} />
-                      <View style={[styles.scanGridCol, { left: '25%' }]} />
-                      <View style={[styles.scanGridCol, { left: '50%' }]} />
-                      <View style={[styles.scanGridCol, { left: '75%' }]} />
-                      
-                      {/* Circular target scan boundary ring */}
-                      <View style={styles.scanTargetRing} />
-                      <View style={styles.scanCrosshairV} />
-                      <View style={styles.scanCrosshairH} />
-                    </View>
-                    
-                    {/* Hotspot markers overlay */}
-                    {currentScan.detections && currentScan.detections.map((det, idx) => {
-                      const isActive = activeDetection?.label === det.label;
-                      const leftPos = currentScan.isFrontFacing ? (100 - det.x) : det.x;
-                      return (
-                        <TouchableOpacity
-                          key={idx}
-                          style={[
-                            styles.hotspotDot,
-                            { left: `${leftPos}%`, top: `${det.y}%` },
-                            isActive && styles.hotspotDotActive
-                          ]}
-                          onPress={() => setActiveDetection(det)}
-                        >
-                          <Text style={styles.hotspotDotEmoji}>
-                            {det.type === 'pores' ? '🔍' : det.type === 'dry' ? '💧' : det.type === 'redness' ? '🔴' : det.type === 'lines' ? '🌸' : '⛱️'}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  
-                  {/* Active detection indicator tooltip details */}
-                  {activeDetection ? (
-                    <View style={styles.activeConcernOverlayCard}>
-                      <View style={styles.activeConcernRow}>
-                        <Text style={styles.activeConcernLabel}>
-                          {activeDetection.type === 'pores' ? '🔍' : activeDetection.type === 'dry' ? '💧' : activeDetection.type === 'redness' ? '🔴' : activeDetection.type === 'lines' ? '🌸' : '⛱️'}{' '}
-                          {activeDetection.label}
-                        </Text>
-                        <TouchableOpacity onPress={() => setActiveDetection(null)}>
-                          <Text style={styles.closeConcernText}>✕</Text>
-                        </TouchableOpacity>
+                {/* Score Gauge Circle */}
+                <View style={styles.insightsGaugeCard}>
+                  <View style={styles.gaugeOuterRing}>
+                    <LinearGradient
+                      colors={[COLORS.rosePrimary, '#FFF']}
+                      style={styles.gaugeInnerRing}
+                    >
+                      <View style={styles.gaugeCenterWhite}>
+                        <Text style={styles.gaugeScoreBig}>{currentScan.scores.overall}</Text>
+                        <Text style={styles.gaugeScoreLabelText}>Your Skin Score</Text>
                       </View>
-                      <Text style={styles.activeConcernDescription}>{activeDetection.description}</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.noActiveConcernCard}>
-                      <Text style={styles.noActiveConcernText}>
-                        💡 Tap scanning targets highlighted on your face map to load localized diagnostics.
+                    </LinearGradient>
+                  </View>
+
+                  {/* Delta Badge Pill */}
+                  {scans.length > 1 && (
+                    <View style={styles.deltaBadgePill}>
+                      <Text style={styles.deltaBadgeText}>
+                        {avgImprovement >= 0 ? `+${avgImprovement}` : avgImprovement} pts since last scan
                       </Text>
                     </View>
                   )}
                 </View>
 
-                {/* Delta compare warning if multiple scans exist */}
-                {scans.length >= 2 && currentScan.id === scans[0].id && (
-                  <BlurView intensity={75} tint="light" style={styles.compareDeltaCard}>
-                    <Text style={styles.compareDeltaTitle}>Scan Progress Delta (vs previous scan)</Text>
-                    <View style={styles.deltaListRow}>
-                      {['hydration', 'texture', 'pores'].map(dim => {
-                        const delta = getDeltaString(dim as any);
-                        if (!delta) return null;
-                        const meta = DIMENSION_METADATA[dim as keyof typeof DIMENSION_METADATA];
-                        return (
-                          <View key={dim} style={styles.deltaItemCol}>
-                            <Text style={styles.deltaItemLabel}>
-                              {meta.icon} {dim === 'hydration' ? 'Hydration' : dim === 'texture' ? 'Texture' : 'Pores'}
-                            </Text>
-                            <Text style={[styles.deltaItemValue, { color: delta.color }]}>{delta.text}</Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </BlurView>
-                )}
- 
-                {/* Breakdown cards for dimensions */}
+                {/* Pros/Cons Summary Card */}
+                <View style={styles.prosConsCard}>
+                  {/* Left: Strengths */}
+                  <View style={styles.prosConsColumn}>
+                    <Text style={[styles.prosConsHeader, { color: COLORS.greenSuccess }]}>Strengths</Text>
+                    <Text style={styles.prosConsBullet}>• {currentScan.scores.hydration >= 60 ? 'Healthy moisture levels' : 'Strong barrier'}</Text>
+                    <Text style={styles.prosConsBullet}>• {currentScan.scores.pores < 50 ? 'Refined pore visibility' : 'Vibrant skin tone'}</Text>
+                  </View>
+                  <View style={styles.prosConsDivider} />
+                  {/* Right: Watch out */}
+                  <View style={styles.prosConsColumn}>
+                    <Text style={[styles.prosConsHeader, { color: COLORS.goldAccent }]}>Watch out</Text>
+                    <Text style={styles.prosConsBullet}>• {currentScan.scores.hydration < 60 ? 'Cheek dehydration' : 'T-zone shine'}</Text>
+                    <Text style={styles.prosConsBullet}>• {currentScan.scores.pores >= 50 ? 'Nasal pore shadows' : 'UV spotting risk'}</Text>
+                  </View>
+                </View>
+
                 <Text style={styles.sectionHeaderTitle}>Skin Dimension Breakdowns</Text>
+                
+                {/* 7 Dimension Cards */}
                 {Object.keys(DIMENSION_METADATA).map(dimKey => {
                   const score = currentScan.scores[dimKey as keyof ScanScores];
                   const explanation = currentScan.explanations[dimKey as keyof ScanExplanations];
@@ -1155,70 +1152,56 @@ export default function AppIndex() {
                   return (
                     <TouchableOpacity
                       key={dimKey}
-                      activeOpacity={0.85}
+                      activeOpacity={0.9}
+                      style={styles.dimensionCard}
                       onPress={() => setExpandedDim(isExpanded ? null : dimKey)}
                     >
-                      <BlurView intensity={75} tint="light" style={styles.dimensionCard}>
-                        {/* Header Row - Redesigned to prevent horizontal overflow */}
-                        <View style={styles.dimHeaderRow}>
-                          <View style={styles.dimTitleCol}>
-                            <Text style={styles.dimIcon}>{metadata.icon}</Text>
-                            <Text style={styles.dimName}>{metadata.label}</Text>
-                          </View>
-                          
-                          <View style={styles.dimScoreColRight}>
-                            <View style={[styles.dimScoreBadge, { backgroundColor: metadata.color }]}>
-                              <Text style={styles.dimScoreText}>{score}/100</Text>
-                            </View>
-                            <Text style={styles.chevronIcon}>{isExpanded ? '▲' : '▼'}</Text>
-                          </View>
+                      <View style={styles.dimHeaderRow}>
+                        <View style={styles.dimTitleCol}>
+                          <Text style={styles.dimIcon}>{metadata.icon}</Text>
+                          <Text style={styles.dimName}>{metadata.label}</Text>
                         </View>
-
-                        {/* Sub-header row for Status Badge & Delta Comparison */}
-                        <View style={styles.dimSubHeaderRow}>
-                          <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-                            <Text style={[styles.statusBadgeText, { color: status.color }]}>{status.label}</Text>
+                        <View style={styles.dimScoreColRight}>
+                          <View style={[styles.dimScoreBadge, { backgroundColor: metadata.color }]}>
+                            <Text style={styles.dimScoreText}>{score}/100</Text>
                           </View>
-                          {scans.length >= 2 && currentScan.id === scans[0].id && getDeltaString(dimKey as any) && (
-                            <Text style={[styles.dimDeltaText, { color: getDeltaString(dimKey as any)!.color }]}>
-                              {getDeltaString(dimKey as any)!.text}
-                            </Text>
-                          )}
+                          <Text style={styles.chevronIcon}>{isExpanded ? '▲' : '▼'}</Text>
                         </View>
+                      </View>
 
-                        {/* Interactive Progress Slider */}
-                        <View style={styles.metricProgressBg}>
-                          <View style={[styles.metricProgressFill, { width: `${score}%`, backgroundColor: metadata.color }]} />
+                      <View style={styles.dimSubHeaderRow}>
+                        <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+                          <Text style={[styles.statusBadgeText, { color: status.color }]}>{status.label}</Text>
                         </View>
+                      </View>
 
-                        {/* Expandable Clinical Breakdowns */}
-                        {isExpanded ? (
-                          <View style={styles.expandedContentBlock}>
-                            <Text style={styles.dimExplanation}>{explanation}</Text>
-                            
-                            <View style={styles.cardDivider} />
-                            
-                            <View style={styles.ingredientsRow}>
-                              <Text style={styles.ingredientsTitle}>🔬 Key Actives:</Text>
-                              <Text style={styles.ingredientsValue}>{dimIngredients[dimKey]}</Text>
-                            </View>
+                      {/* Rose to Amber Progress Bar */}
+                      <View style={styles.metricProgressBg}>
+                        <View style={[styles.metricProgressFill, { width: `${score}%`, backgroundColor: COLORS.rosePrimary }]} />
+                      </View>
 
-                            <View style={styles.actionRow}>
-                              <Text style={styles.actionTitle}>⚡ Action Plan:</Text>
-                              <Text style={styles.actionValue}>{dimActions[dimKey]}</Text>
-                            </View>
-
-                            <TouchableOpacity 
-                              style={styles.cardActionLink}
-                              onPress={() => setActiveTab('products')}
-                            >
-                              <Text style={styles.cardActionLinkText}>View Matching Catalog Products 🧴 →</Text>
-                            </TouchableOpacity>
+                      {isExpanded ? (
+                        <View style={styles.expandedContentBlock}>
+                          <Text style={styles.dimExplanation}>{explanation}</Text>
+                          <View style={styles.cardDivider} />
+                          <View style={styles.ingredientsRow}>
+                            <Text style={styles.ingredientsTitle}>🔬 Key Actives:</Text>
+                            <Text style={styles.ingredientsValue}>{dimIngredients[dimKey]}</Text>
                           </View>
-                        ) : (
-                          <Text style={styles.tapToExpandText}>Tap card to review clinical analysis & actives plan</Text>
-                        )}
-                      </BlurView>
+                          <View style={styles.actionRow}>
+                            <Text style={styles.actionTitle}>⚡ Action Plan:</Text>
+                            <Text style={styles.actionValue}>{dimActions[dimKey]}</Text>
+                          </View>
+                          <TouchableOpacity 
+                            style={styles.cardActionLink}
+                            onPress={() => setActiveTab('products')}
+                          >
+                            <Text style={styles.cardActionLinkText}>View Products 🧴 →</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <Text style={styles.tapToExpandText}>Tap card to review clinical analysis & actives plan</Text>
+                      )}
                     </TouchableOpacity>
                   );
                 })}
@@ -1226,8 +1209,8 @@ export default function AppIndex() {
             ) : (
               <View style={styles.emptyStateCard}>
                 <Text style={styles.emptyStateTitle}>No Analysis Data Yet</Text>
-                <Text style={styles.emptyStateText}>Take your first scan check in the Camera tab to generate insights.</Text>
-                <TouchableOpacity style={styles.primaryButton} onPress={() => setActiveTab('camera')}>
+                <Text style={styles.emptyStateText}>Take your first scan check in the Scan tab to generate insights.</Text>
+                <TouchableOpacity style={[styles.primaryButton, { backgroundColor: COLORS.rosePrimary }]} onPress={() => setActiveTab('camera')}>
                   <Text style={styles.primaryButtonText}>Scan My Skin Now</Text>
                 </TouchableOpacity>
               </View>
@@ -1235,53 +1218,151 @@ export default function AppIndex() {
           </View>
         )}
 
-        {/* JOURNEY TAB */}
+        {/* RECOMMENDATIONS TAB (Screen 8) */}
+        {activeTab === 'products' && (
+          <View style={styles.tabContentContainer}>
+            <Text style={styles.tabTitle}>Recommendations</Text>
+            <Text style={styles.tabSubtitle}>Personalised routines curated for your target skin concerns.</Text>
+
+            {/* Section 1: Products For You */}
+            <Text style={styles.sectionHeaderTitle}>Products for you</Text>
+            {recommendedProducts.length > 0 ? (
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.horizontalProductsScroll}
+              >
+                {recommendedProducts.map(prod => {
+                  const primaryDim = prod.dimensions[0];
+                  const dimMeta = DIMENSION_METADATA[primaryDim as keyof typeof DIMENSION_METADATA];
+
+                  return (
+                    <View key={prod.id} style={styles.recomProductCard}>
+                      <View style={styles.recomProductBadgeContainer}>
+                        <Text style={[styles.recomProductBadge, { backgroundColor: dimMeta?.color || COLORS.rosePrimary }]}>
+                          For: {dimMeta?.label || 'Skincare'}
+                        </Text>
+                      </View>
+                      
+                      <Image source={{ uri: prod.image_url }} style={styles.recomProductImage} />
+                      
+                      <Text style={styles.recomProductBrand}>{prod.brand}</Text>
+                      <Text style={styles.recomProductName} numberOfLines={1}>{prod.name}</Text>
+                      <Text style={styles.recomProductPrice}>₹{prod.price_inr}</Text>
+                      
+                      <TouchableOpacity
+                        style={[styles.recomCTAButton, { backgroundColor: COLORS.rosePrimary }]}
+                        onPress={async () => {
+                          await trackProductClick(prod.id);
+                          Alert.alert('Shop Redirect', `Redirecting to purchase ${prod.name}...`);
+                        }}
+                      >
+                        <Text style={styles.recomCTAText}>View →</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.recomDisclosure}>*Affiliate link</Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            ) : (
+              <View style={styles.emptyStateCard}>
+                <Text style={styles.emptyStateText}>Product recommendations populate once you complete a skin scan.</Text>
+              </View>
+            )}
+
+            {/* Section 2: Home Remedies */}
+            <Text style={[styles.sectionHeaderTitle, { marginTop: 24 }]}>Home remedies</Text>
+            <View style={styles.remediesList}>
+              {HOME_REMEDIES.map((remedy, idx) => (
+                <View key={idx} style={styles.remedyRowCard}>
+                  <View style={styles.remedyHeader}>
+                    <Text style={styles.remedyNameText}>{remedy.name}</Text>
+                    <View style={styles.remedyTagPill}>
+                      <Text style={styles.remedyTagText}>{remedy.dimension}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.remedyInstruction}>{remedy.instruction}</Text>
+                  <View style={styles.naturalBadge}>
+                    <Text style={styles.naturalBadgeText}>{remedy.tag}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* SKIN JOURNEY / HISTORY TAB (Screen 9) */}
         {activeTab === 'journey' && (
           <View style={styles.tabContentContainer}>
-            <Text style={styles.tabTitle}>Skin Journey Timeline</Text>
-            <Text style={styles.tabSubtitle}>Track visual progress indicators and score variations scan-to-scan.</Text>
+            <Text style={styles.tabTitle}>Your Skin Journey</Text>
+            <Text style={styles.tabSubtitle}>Track overall trend changes and score variations across scans.</Text>
 
-            {/* Score Trend Line Graph */}
             <Text style={styles.sectionHeaderTitle}>Overall Health Trend</Text>
             {renderSVGHistoryChart()}
 
-            {/* Timeline listing */}
-            <Text style={styles.sectionHeaderTitle}>Scan History</Text>
+            <Text style={[styles.sectionHeaderTitle, { marginTop: 24 }]}>Past scans</Text>
             {scans.length > 0 ? (
-              scans.map((scan, index) => {
-                const dateStr = new Date(scan.createdAt).toLocaleDateString('en-IN', {
-                  day: 'numeric',
-                  month: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                });
-                const isActive = currentScan?.id === scan.id;
+              <View style={styles.timelineList}>
+                {scans.map((scan, idx) => {
+                  const dateStr = new Date(scan.createdAt).toLocaleDateString('en-IN', {
+                    day: 'numeric',
+                    month: 'short'
+                  });
+                  
+                  // Compute delta compared to the subsequent scan chronologically
+                  let deltaText = 'Baseline';
+                  let isPositive = true;
+                  const nextScan = scans[idx + 1];
+                  if (nextScan) {
+                    const diff = scan.scores.overall - nextScan.scores.overall;
+                    deltaText = diff >= 0 ? `+${diff} pts` : `${diff} pts`;
+                    isPositive = diff >= 0;
+                  }
 
-                return (
-                  <TouchableOpacity
-                    key={scan.id}
-                    onPress={() => {
-                      setCurrentScan(scan);
-                      setActiveTab('insights');
-                    }}
-                  >
-                    <BlurView intensity={75} tint="light" style={[styles.historyTimelineCard, isActive && styles.historyTimelineCardActive]}>
-                      <View style={styles.historyRow}>
-                        <View style={styles.historyTextCol}>
-                          <Text style={styles.historyDate}>{dateStr}</Text>
-                          <Text style={styles.historyGoals}>
-                            {index === scans.length - 1 ? 'Baseline Scan' : `Scan #${scans.length - index}`}
+                  return (
+                    <TouchableOpacity
+                      key={scan.id}
+                      activeOpacity={0.8}
+                      style={styles.timelineRowCard}
+                      onPress={() => setSelectedPastScan(scan)}
+                    >
+                      <View style={styles.timelineThumbFrame}>
+                        {scan.imageUrl ? (
+                          <Image source={{ uri: scan.imageUrl }} style={styles.timelineThumbImage} />
+                        ) : (
+                          <View style={[styles.timelineThumbImage, { backgroundColor: COLORS.border, justifyContent: 'center', alignItems: 'center' }]}>
+                            <Text style={{ fontSize: 16 }}>👤</Text>
+                          </View>
+                        )}
+                        <BlurView intensity={30} style={StyleSheet.absoluteFillObject} />
+                      </View>
+
+                      <View style={styles.timelineInfoCol}>
+                        <Text style={styles.timelineDateText}>{dateStr}</Text>
+                        <Text style={styles.timelineLabelText}>Scan #{scans.length - idx}</Text>
+                      </View>
+
+                      <View style={styles.timelineBadgeCol}>
+                        <View style={styles.timelineScoreBadge}>
+                          <Text style={styles.timelineScoreText}>{scan.scores.overall}</Text>
+                        </View>
+                        <View style={[
+                          styles.timelineDeltaBadge,
+                          { backgroundColor: deltaText === 'Baseline' ? COLORS.border : isPositive ? '#EAF5EC' : '#FDF2F2' }
+                        ]}>
+                          <Text style={[
+                            styles.timelineDeltaText,
+                            { color: deltaText === 'Baseline' ? COLORS.textDark : isPositive ? COLORS.greenSuccess : COLORS.rosePrimary }
+                          ]}>
+                            {deltaText}
                           </Text>
                         </View>
-                        <View style={styles.historyScoreCol}>
-                          <Text style={styles.historyScoreVal}>{scan.scores.overall}</Text>
-                          <Text style={styles.historyScoreLbl}>Overall</Text>
-                        </View>
                       </View>
-                    </BlurView>
-                  </TouchableOpacity>
-                );
-              })
+                      <Text style={styles.timelineChevron}>➔</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             ) : (
               <View style={styles.emptyStateCard}>
                 <Text style={styles.emptyStateText}>Complete your first scan to begin compiling history timeline.</Text>
@@ -1290,79 +1371,103 @@ export default function AppIndex() {
           </View>
         )}
 
-        {/* PRODUCTS TAB */}
-        {activeTab === 'products' && (
-          <View style={styles.tabContentContainer}>
-            <Text style={styles.tabTitle}>Recommended Products</Text>
-            <Text style={styles.tabSubtitle}>
-              Curated items mapped to your lowest skin dimensions, available in India.
-            </Text>
-
-            {recommendedProducts.length > 0 ? (
-              recommendedProducts.map(prod => {
-                // Get display colors for mapped dimensions
-                const primaryDim = prod.dimensions[0];
-                const dimMeta = DIMENSION_METADATA[primaryDim as keyof typeof DIMENSION_METADATA];
-
-                return (
-                  <BlurView key={prod.id} intensity={75} tint="light" style={styles.productCard}>
-                    <View style={styles.productBadgeContainer}>
-                      <Text style={[styles.productBadge, { backgroundColor: dimMeta?.color || COLORS.rosePrimary }]}>
-                        Target: {dimMeta?.label || 'General Care'}
-                      </Text>
-                    </View>
-                    
-                    <View style={styles.productRow}>
-                      <Image source={{ uri: prod.image_url }} style={styles.productImage} />
-                      <View style={styles.productInfoCol}>
-                        <Text style={styles.productBrand}>{prod.brand}</Text>
-                        <Text style={styles.productName}>{prod.name}</Text>
-                        <Text style={styles.productPrice}>₹{prod.price_inr}</Text>
-                      </View>
-                    </View>
- 
-                    <Text style={styles.productReason}>{prod.reason_text}</Text>
- 
-                    <TouchableOpacity
-                      style={styles.affiliateLinkButton}
-                      onPress={async () => {
-                        await trackProductClick(prod.id);
-                        Alert.alert('Affiliate Link Redirect', `Navigating to shop product on retailer partner...`);
-                      }}
-                    >
-                      <Text style={styles.affiliateBtnText}>Shop Now</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.affiliateDisclosure}>
-                      *Affiliate link — we may earn a small commission on qualifying purchases.
-                    </Text>
-                  </BlurView>
-                );
-              })
-            ) : (
-              <View style={styles.emptyStateCard}>
-                <Text style={styles.emptyStateText}>Product recommendations populate once you complete a skin scan.</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* PROFILE/SETTINGS TAB */}
+        {/* PROFILE/SETTINGS TAB (Screen 12) */}
         {activeTab === 'profile' && (
           <View style={styles.tabContentContainer}>
             <Text style={styles.tabTitle}>Account & Settings</Text>
 
-            {/* Profile context preview */}
-            <BlurView intensity={75} tint="light" style={styles.profileSummaryCard}>
-              <Text style={styles.profileNameTitle}>{profile.name}</Text>
-              <Text style={styles.profileMetaLabel}>Age group: {profile.ageRange}</Text>
-              <Text style={styles.profileMetaLabel}>Skin type: {profile.skinType || 'Not specified'}</Text>
-              <Text style={styles.profileMetaLabel}>
-                Goals: {profile.skinGoals.length > 0 ? profile.skinGoals.join(', ') : 'None'}
-              </Text>
-            </BlurView>
- 
-            {/* Dev settings */}
-            <Text style={styles.sectionHeaderTitle}>Developer Connections</Text>
+            {/* Profile Avatar & Badge */}
+            <View style={styles.profileAvatarCard}>
+              <View style={styles.profileAvatarBig}>
+                <Text style={styles.profileAvatarTextBig}>{profile.name ? profile.name.charAt(0).toUpperCase() : 'U'}</Text>
+              </View>
+              <Text style={styles.profileNameBig}>{profile.name}</Text>
+              <View style={[styles.profileProBadge, { backgroundColor: COLORS.rosePrimary }]}>
+                <Text style={styles.profileProText}>Pro Member</Text>
+              </View>
+            </View>
+
+            {/* Statistics Row */}
+            <View style={styles.profileStatsRow}>
+              <View style={styles.profileStatBox}>
+                <Text style={styles.profileStatNumber}>{totalScans}</Text>
+                <Text style={styles.profileStatLabel}>Total Scans</Text>
+              </View>
+              <View style={styles.profileStatDivider} />
+              <View style={styles.profileStatBox}>
+                <Text style={styles.profileStatNumber}>{daysTracking}</Text>
+                <Text style={styles.profileStatLabel}>Days Tracking</Text>
+              </View>
+              <View style={styles.profileStatDivider} />
+              <View style={styles.profileStatBox}>
+                <Text style={styles.profileStatNumber}>{avgImprovement >= 0 ? `+${avgImprovement}` : avgImprovement}</Text>
+                <Text style={styles.profileStatLabel}>Avg Improvement</Text>
+              </View>
+            </View>
+
+            {/* Settings list cards */}
+            <Text style={styles.sectionHeaderTitle}>Profile Settings</Text>
+            <View style={styles.settingsListCardContainer}>
+              <TouchableOpacity style={styles.settingItemRow} onPress={() => Alert.alert('Edit Profile', 'Edit profile clicked.')}>
+                <Text style={styles.settingItemLabel}>Edit profile</Text>
+                <Text style={styles.settingItemChevron}>➔</Text>
+              </TouchableOpacity>
+              <View style={styles.settingDivider} />
+              <TouchableOpacity style={styles.settingItemRow} onPress={() => setOnboardStep('type')}>
+                <Text style={styles.settingItemLabel}>Skin type & goals</Text>
+                <Text style={styles.settingItemChevron}>➔</Text>
+              </TouchableOpacity>
+              <View style={styles.settingDivider} />
+              <TouchableOpacity style={styles.settingItemRow} onPress={() => Alert.alert('Notifications', 'Preferences saved.')}>
+                <Text style={styles.settingItemLabel}>Notification preferences</Text>
+                <Text style={styles.settingItemChevron}>➔</Text>
+              </TouchableOpacity>
+              <View style={styles.settingDivider} />
+              <TouchableOpacity style={styles.settingItemRow} onPress={() => Alert.alert('Privacy', 'Your data is secured.')}>
+                <Text style={styles.settingItemLabel}>Privacy & data</Text>
+                <Text style={styles.settingItemChevron}>➔</Text>
+              </TouchableOpacity>
+              <View style={styles.settingDivider} />
+              <TouchableOpacity 
+                style={styles.settingItemRow} 
+                onPress={() => {
+                  Alert.alert(
+                    'Confirm Deletion',
+                    'Permanently delete all skin metrics, profile data, and scans? This cannot be undone.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { 
+                        text: 'Delete My Data', 
+                        style: 'destructive',
+                        onPress: async () => {
+                          await clearUserHistory();
+                          Alert.alert('Data Purged', 'All skin metrics and files deleted.');
+                        } 
+                      }
+                    ]
+                  );
+                }}
+              >
+                <Text style={[styles.settingItemLabel, { color: '#E53E3E' }]}>Delete my data</Text>
+                <Text style={[styles.settingItemChevron, { color: '#E53E3E' }]}>➔</Text>
+              </TouchableOpacity>
+              <View style={styles.settingDivider} />
+              <TouchableOpacity style={styles.settingItemRow} onPress={() => Alert.alert('About', 'DermaAI version 1.0.0. Made for Indian skin types.')}>
+                <Text style={styles.settingItemLabel}>About DermaAI</Text>
+                <Text style={styles.settingItemChevron}>➔</Text>
+              </TouchableOpacity>
+              <View style={styles.settingDivider} />
+              <TouchableOpacity style={styles.settingItemRow} onPress={async () => {
+                await clearUserHistory();
+                Alert.alert('Logged Out', 'Session cleared.');
+              }}>
+                <Text style={styles.settingItemLabel}>Log out</Text>
+                <Text style={styles.settingItemChevron}>➔</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Developer Connections widget */}
+            <Text style={[styles.sectionHeaderTitle, { marginTop: 24 }]}>Developer Connections</Text>
             <BlurView intensity={75} tint="light" style={styles.devCard}>
               <Text style={styles.devLabel}>Local Server API Endpoint IP Address</Text>
               <TextInput
@@ -1371,11 +1476,8 @@ export default function AppIndex() {
                 onChangeText={setBackendUrl}
                 placeholder="http://192.168.1.X:3000"
               />
-              <Text style={styles.devHelpText}>
-                Use your machine's LAN IP or a public tunnel URL when testing.
-              </Text>
               <TouchableOpacity
-                style={styles.devSyncButton}
+                style={[styles.devSyncButton, { backgroundColor: COLORS.rosePrimary }]}
                 onPress={async () => {
                   try {
                     const res = await fetch('https://raw.githubusercontent.com/Keshav981/skiniq-app/main/backend_url.txt?t=' + Date.now());
@@ -1398,54 +1500,11 @@ export default function AppIndex() {
                 <Text style={styles.devSyncButtonText}>Sync Active Tunnel from GitHub</Text>
               </TouchableOpacity>
             </BlurView>
-
-            {/* Privacy Actions */}
-            <Text style={styles.sectionHeaderTitle}>Privacy & Biometrics Control</Text>
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={() => {
-                Alert.alert(
-                  'Confirm Deletion',
-                  'This action permanently purges all saved scan metrics, subscription status, and profile tags from servers and your local device. This cannot be undone.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { 
-                      text: 'Delete All Data', 
-                      style: 'destructive',
-                      onPress: async () => {
-                        await clearUserHistory();
-                        Alert.alert('Data Purged', 'All skin scan history and profiles deleted successfully.');
-                      } 
-                    }
-                  ]
-                );
-              }}
-            >
-              <Text style={styles.deleteButtonText}>Delete My Skin History & Profile</Text>
-            </TouchableOpacity>
-
-            {/* Policy & Legal disclaimer */}
-            <View style={styles.policyCard}>
-              <Text style={styles.policyHeader}>Derma AI Policy Safeguards</Text>
-              <Text style={styles.policyDesc}>
-                1. Face scans are treated as temporary raw data and analyzed using secure end-to-end HTTPS.
-              </Text>
-              <Text style={styles.policyDesc}>
-                2. We do not store original visual photos permanently unless opted-in. Only tabular metric scores are saved to show trend charts.
-              </Text>
-              <Text style={styles.policyDesc}>
-                3. We never distribute user diagnostics or names to external marketing brokers.
-              </Text>
-              
-              <Text style={styles.policyDisclaimerText}>
-                This is a cosmetic assessment utility based on visual indicators. Consult a certified medical dermatologist for clinical skin diseases.
-              </Text>
-            </View>
           </View>
         )}
       </ScrollView>
 
-      {/* Subscription Paywall Modal */}
+      {/* Screen 11: Subscription Paywall Modal */}
       <Modal
         visible={paywallVisible}
         animationType="slide"
@@ -1453,7 +1512,7 @@ export default function AppIndex() {
         onRequestClose={() => setPaywallVisible(false)}
       >
         <LinearGradient
-          colors={[COLORS.roseLight, '#FFF']}
+          colors={[COLORS.bgLight, '#FFF']}
           style={styles.paywallWrapper}
         >
           <View style={styles.paywallHeader}>
@@ -1463,84 +1522,92 @@ export default function AppIndex() {
           </View>
 
           <ScrollView contentContainerStyle={styles.paywallScroll}>
-            <Text style={styles.paywallTitle}>Derma AI Pro</Text>
-            <Text style={styles.paywallSubtitle}>Unlock Your Complete Skincare Tracker</Text>
+            <Text style={{ fontSize: 44 }}>🔒</Text>
+            <Text style={styles.paywallTitle}>Unlock your skin journey</Text>
+            <Text style={styles.paywallSubtitle}>Your first scan is free. Subscribe to track your progress.</Text>
 
-            <View style={styles.socialProofBox}>
-              <Text style={styles.socialProofText}>Join 15,000+ users tracking skin visual improvements daily.</Text>
+            {/* Pricing Cards */}
+            <View style={styles.paywallPriceCardsRow}>
+              <TouchableOpacity 
+                style={[styles.paywallPriceCard, { borderColor: COLORS.border }]} 
+                onPress={() => buySubscription('monthly')}
+              >
+                <Text style={styles.paywallPriceTier}>Monthly</Text>
+                <Text style={styles.paywallPriceVal}>₹149/month</Text>
+                <Text style={styles.paywallPriceDesc}>Cancel anytime</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.paywallPriceCard, styles.paywallPriceCardSelected]} 
+                onPress={() => buySubscription('annual')}
+              >
+                <View style={styles.bestValueBadge}>
+                  <Text style={styles.bestValueText}>BEST VALUE</Text>
+                </View>
+                <Text style={[styles.paywallPriceTier, { color: COLORS.rosePrimary }]}>Annual</Text>
+                <Text style={[styles.paywallPriceVal, { color: COLORS.rosePrimary }]}>₹999/year</Text>
+                <Text style={styles.paywallPriceDesc}>Save 44% compared to monthly</Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Unlocked lists */}
-            <View style={styles.perkList}>
+            {/* Feature checklist */}
+            <View style={[styles.perkList, { marginTop: 24 }]}>
               <View style={styles.perkItem}>
                 <Text style={styles.perkIcon}>✓</Text>
                 <View>
-                  <Text style={styles.perkTitle}>Unlimited Skin Scans</Text>
-                  <Text style={styles.perkDesc}>Scan daily/weekly without restriction thresholds.</Text>
+                  <Text style={styles.perkTitle}>Unlimited Scans</Text>
+                  <Text style={styles.perkDesc}>Scan daily and track micro skin improvements.</Text>
                 </View>
               </View>
               <View style={styles.perkItem}>
                 <Text style={styles.perkIcon}>✓</Text>
                 <View>
-                  <Text style={styles.perkTitle}>Advanced Progress Trend Chart</Text>
-                  <Text style={styles.perkDesc}>Review timeline curves for all 7 skin dimensions.</Text>
+                  <Text style={styles.perkTitle}>Full Trend History</Text>
+                  <Text style={styles.perkDesc}>Review overall skin improvement graphs over time.</Text>
                 </View>
               </View>
               <View style={styles.perkItem}>
                 <Text style={styles.perkIcon}>✓</Text>
                 <View>
-                  <Text style={styles.perkTitle}>Tailored Affiliate Catalog Recommendations</Text>
-                  <Text style={styles.perkDesc}>Get direct matching on lowest indicator categories.</Text>
+                  <Text style={styles.perkTitle}>Personalised Recommendations</Text>
+                  <Text style={styles.perkDesc}>Custom matching actives from catalog products.</Text>
+                </View>
+              </View>
+              <View style={styles.perkItem}>
+                <Text style={styles.perkIcon}>✓</Text>
+                <View>
+                  <Text style={styles.perkTitle}>Home Remedy Library</Text>
+                  <Text style={styles.perkDesc}>Unlock natural, free skin fixes you can make at home.</Text>
                 </View>
               </View>
             </View>
-
-            {/* Pricing Packages */}
-            <TouchableOpacity style={styles.priceCard} onPress={() => buySubscription('monthly')}>
-              <View style={styles.priceRow}>
-                <Text style={styles.priceTier}>Monthly Subscription</Text>
-                <Text style={styles.priceVal}>₹149/mo</Text>
-              </View>
-              <Text style={styles.priceDesc}>Scan freely. Cancel anytime.</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.priceCard, styles.priceCardActive]} onPress={() => buySubscription('annual')}>
-              <View style={styles.bestValueBadge}>
-                <Text style={styles.bestValueText}>BEST VALUE</Text>
-              </View>
-              <View style={styles.priceRow}>
-                <Text style={[styles.priceTier, styles.priceActiveText]}>Annual Plan</Text>
-                <Text style={[styles.priceVal, styles.priceActiveText]}>₹999/yr</Text>
-              </View>
-              <Text style={styles.priceDesc}>Save 44% compared to monthly scans.</Text>
-            </TouchableOpacity>
-
-            <Text style={styles.paywallTerms}>
-              Payment will be charged to your iTunes Account upon confirmation of mock sandbox click. Subscriptions renew automatically unless cancelled.
-            </Text>
 
             <TouchableOpacity 
-              style={[styles.primaryButton, { marginTop: 20 }]}
+              style={[styles.primaryButton, { backgroundColor: COLORS.rosePrimary, width: '100%' }]}
               onPress={async () => {
                 await buySubscription('annual');
                 setPaywallVisible(false);
-                Alert.alert('Subscription Unlocked', 'Congratulations! You are now a Derma AI Pro member. Unlimited scans unlocked.');
+                Alert.alert('Subscription Activated', 'Welcome to DermaAI Pro!');
               }}
             >
-              <Text style={styles.primaryButtonText}>Activate Sandbox Free Trial</Text>
+              <Text style={styles.primaryButtonText}>Start free — subscribe now</Text>
             </TouchableOpacity>
+
+            <Text style={styles.paywallTerms}>
+              Cancel anytime · Secure payment · No hidden charges
+            </Text>
           </ScrollView>
         </LinearGradient>
       </Modal>
 
-      {/* Custom navigation bottom tabs bar */}
+      {/* Bottom Navigation Tabs Bar */}
       <BlurView
         intensity={85}
         tint="light"
         style={[styles.bottomTabContainer, { paddingBottom: insets.bottom || 16 }]}
       >
         <View style={styles.bottomTabRow}>
-          {/* Animated sliding glass indicator */}
+          {/* Animated sliding indicator */}
           <Animated.View
             style={[
               styles.activeTabIndicator,
@@ -1575,31 +1642,31 @@ export default function AppIndex() {
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'journey' && styles.tabButtonActive]}
-            onPress={() => {
-              if (scans.length === 0) {
-                Alert.alert('No Scan History', 'Perform a skin check scan to unlock journey charts.');
-                return;
-              }
-              setActiveTab('journey');
-            }}
-          >
-            <Text style={styles.tabBtnIcon}>📈</Text>
-            <Text style={[styles.tabBtnText, activeTab === 'journey' && styles.tabBtnTextActive]}>Journey</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
             style={[styles.tabButton, activeTab === 'products' && styles.tabButtonActive]}
             onPress={() => {
               if (scans.length === 0) {
-                Alert.alert('No Scan History', 'Perform a scan first to populate target suggestions.');
+                Alert.alert('No Scan History', 'Perform a scan first to populate recommendations.');
                 return;
               }
               setActiveTab('products');
             }}
           >
             <Text style={styles.tabBtnIcon}>🧴</Text>
-            <Text style={[styles.tabBtnText, activeTab === 'products' && styles.tabBtnTextActive]}>Products</Text>
+            <Text style={[styles.tabBtnText, activeTab === 'products' && styles.tabBtnTextActive]}>Recommend</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'journey' && styles.tabButtonActive]}
+            onPress={() => {
+              if (scans.length === 0) {
+                Alert.alert('No Scan History', 'Perform a skin check scan to unlock history charts.');
+                return;
+              }
+              setActiveTab('journey');
+            }}
+          >
+            <Text style={styles.tabBtnIcon}>📈</Text>
+            <Text style={[styles.tabBtnText, activeTab === 'journey' && styles.tabBtnTextActive]}>History</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -1628,173 +1695,428 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 60
   },
-  onboardHeaderContainer: {
+  splashContent: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 30
-  },
-  logoText: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: COLORS.roseDark,
-    letterSpacing: 2
-  },
-  subtitleText: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    marginTop: 4
-  },
-  onboardCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
-    borderRadius: 24,
     padding: 24,
-    shadowColor: COLORS.shadowColor,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.8,
-    shadowRadius: 16,
-    elevation: 4,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)'
+    width: '100%'
   },
-  sectionHeader: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.textDark,
+  logoBadgeContainer: {
+    alignItems: 'center',
     marginBottom: 20
   },
-  inputLabel: {
-    fontSize: 14,
+  logoBadgeCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E8E6E0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2
+  },
+  splashLogoText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#D4537E',
+    marginTop: 12,
+    letterSpacing: 0.5
+  },
+  splashTagline: {
+    fontSize: 16,
+    color: '#888780',
+    fontStyle: 'italic',
+    marginBottom: 40,
+    textAlign: 'center'
+  },
+  splashInputWrapper: {
+    width: '100%',
+    marginBottom: 24
+  },
+  splashInputLabel: {
+    fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textDark,
-    marginTop: 18,
+    color: '#888780',
     marginBottom: 8
   },
-  textInput: {
+  splashTextInput: {
+    width: '100%',
     height: 48,
+    backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
+    borderColor: '#E8E6E0',
     borderRadius: 12,
     paddingHorizontal: 16,
-    fontSize: 15,
-    color: COLORS.textDark,
-    backgroundColor: COLORS.bgLight
+    fontSize: 16,
+    color: '#2C2C2A'
   },
-  chipRow: {
+  splashCTA: {
+    width: '100%',
+    height: 50,
+    borderRadius: 999,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#D4537E',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3
+  },
+  splashCTAText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold'
+  },
+  splashLink: {
+    marginTop: 20
+  },
+  splashLinkText: {
+    color: '#D4537E',
+    fontSize: 14,
+    fontWeight: '500'
+  },
+  progressBarContainer: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24
+  },
+  progressBarFill: {
+    height: 6,
+    backgroundColor: '#D4537E',
+    borderRadius: 3
+  },
+  progressBarText: {
+    fontSize: 12,
+    color: '#888780',
+    marginLeft: 12,
+    fontWeight: '500'
+  },
+  onboardHeading: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#2C2C2A',
+    marginBottom: 6
+  },
+  onboardSubheading: {
+    fontSize: 15,
+    color: '#888780',
+    marginBottom: 24
+  },
+  typeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -4
+    justifyContent: 'space-between',
+    marginBottom: 20
   },
-  chip: {
+  typeCard: {
+    width: '48%',
+    backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-    borderRadius: 20,
+    borderColor: '#E8E6E0',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1
+  },
+  typeCardSelected: {
+    borderColor: '#D4537E',
+    borderWidth: 1.5
+  },
+  typeCardIcon: {
+    fontSize: 24,
+    marginBottom: 8
+  },
+  typeCardLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2C2C2A',
+    marginBottom: 4
+  },
+  typeCardDesc: {
+    fontSize: 11,
+    color: '#888780',
+    lineHeight: 14
+  },
+  typeCheckBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#D4537E',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  typeCheckText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: 'bold'
+  },
+  goalsPillWrapper: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -4,
+    marginBottom: 20
+  },
+  goalPill: {
+    borderWidth: 1,
+    borderColor: '#E8E6E0',
+    borderRadius: 999,
     paddingVertical: 8,
     paddingHorizontal: 16,
     margin: 4,
     backgroundColor: '#FFF'
   },
-  chipActive: {
-    backgroundColor: COLORS.rosePrimary,
-    borderColor: COLORS.rosePrimary
+  goalPillSelected: {
+    backgroundColor: '#D4537E',
+    borderColor: '#D4537E'
   },
-  chipText: {
+  goalPillText: {
     fontSize: 13,
-    color: COLORS.textMuted,
+    color: '#888780',
     fontWeight: '500'
   },
-  chipTextActive: {
+  goalPillTextSelected: {
     color: '#FFF',
     fontWeight: '600'
   },
-  goalSelectCard: {
+  ageListContainer: {
+    width: '100%',
+    marginBottom: 20
+  },
+  ageRowCard: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 14,
+    backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-    borderRadius: 12,
-    marginBottom: 8,
-    backgroundColor: '#FFF'
+    borderColor: '#E8E6E0',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12
   },
-  goalSelectCardActive: {
-    borderColor: COLORS.rosePrimary,
-    backgroundColor: COLORS.roseLight
+  ageRowCardSelected: {
+    borderColor: '#D4537E'
   },
-  goalSelectIcon: {
-    fontSize: 20,
-    marginRight: 12
+  ageRowText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2C2C2A'
   },
-  goalSelectLabel: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.textMuted,
-    fontWeight: '500'
-  },
-  goalSelectLabelActive: {
-    color: COLORS.textDark,
-    fontWeight: '600'
-  },
-  checkbox: {
+  radioCircle: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: COLORS.glassBorder
-  },
-  checkboxChecked: {
-    backgroundColor: COLORS.rosePrimary,
-    borderColor: COLORS.rosePrimary
-  },
-  primaryButton: {
-    backgroundColor: COLORS.rosePrimary,
-    paddingVertical: 14,
-    borderRadius: 24,
-    alignItems: 'center',
+    borderColor: '#E8E6E0',
     justifyContent: 'center',
-    marginTop: 24,
-    shadowColor: COLORS.rosePrimary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3
+    alignItems: 'center'
   },
-  primaryButtonText: {
+  radioCircleChecked: {
+    borderColor: '#D4537E'
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#D4537E'
+  },
+  darkCameraViewfinder: {
+    width: '100%',
+    height: SCREEN_HEIGHT * 0.72,
+    backgroundColor: '#000',
+    overflow: 'hidden'
+  },
+  viewfinderDarkBackground: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: '#0A0A09',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  ovalGuideViewfinder: {
+    width: SCREEN_WIDTH * 0.65,
+    height: SCREEN_WIDTH * 0.9,
+    borderRadius: 999,
+    borderWidth: 2.5,
+    borderColor: '#D4537E',
+    borderStyle: 'solid',
+    shadowColor: '#D4537E',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 10
+  },
+  viewfinderTopControls: {
+    position: 'absolute',
+    top: 24,
+    left: 24,
+    right: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 10
+  },
+  viewfinderControlBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  viewfinderControlIcon: {
+    color: '#FFF',
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFF'
+    fontWeight: 'bold'
+  },
+  floatingTipPill: {
+    position: 'absolute',
+    top: 80,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    zIndex: 10
+  },
+  floatingTipText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '500'
+  },
+  viewfinderBottomRow: {
+    position: 'absolute',
+    bottom: 70,
+    left: 24,
+    right: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 10
+  },
+  lastScanThumbBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#FFF'
+  },
+  lastScanThumbImg: {
+    width: '100%',
+    height: '100%'
+  },
+  circularCaptureBtnOuter: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 4,
+    borderColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  circularCaptureBtnInner: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#D4537E'
+  },
+  lastScanThumbBtnPlaceholder: {
+    width: 48
+  },
+  uploadInsteadBtn: {
+    position: 'absolute',
+    bottom: 30,
+    zIndex: 10
+  },
+  uploadInsteadText: {
+    color: '#FFF',
+    fontSize: 13,
+    textDecorationLine: 'underline'
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 30,
-    backgroundColor: COLORS.bgLight
+    backgroundColor: '#FAFAF8'
   },
-  loadingTitle: {
-    fontSize: 22,
+  loadingInnerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    width: '100%'
+  },
+  loadingRingWrapper: {
+    width: 140,
+    height: 140,
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 30
+  },
+  loadingRingOuter: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    overflow: 'hidden',
+    position: 'absolute'
+  },
+  loadingRingGradient: {
+    flex: 1,
+    borderRadius: 70
+  },
+  loadingRingSilhouette: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#FFF',
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  loadingMainTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: COLORS.textDark,
-    marginTop: 24,
-    marginBottom: 8
+    color: '#2C2C2A',
+    marginBottom: 20
   },
-  loadingSubtitle: {
-    fontSize: 15,
-    color: COLORS.textMuted,
-    textAlign: 'center',
+  statusLinesList: {
+    width: '100%',
+    paddingHorizontal: 40,
     marginBottom: 40
   },
-  disclaimerTextSmall: {
-    fontSize: 11,
-    color: COLORS.textMuted,
+  statusLineItem: {
+    fontSize: 14,
+    color: '#888780',
+    marginVertical: 6,
+    fontWeight: '500'
+  },
+  loadingDisclaimer: {
+    fontSize: 12,
+    color: '#888780',
     textAlign: 'center',
     paddingHorizontal: 20,
-    lineHeight: 16,
     position: 'absolute',
     bottom: 40
   },
   header: {
-    backgroundColor: 'rgba(255, 255, 255, 0.55)', // Translucent glassmorphic header
+    backgroundColor: 'rgba(255, 255, 255, 0.55)',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(242, 160, 161, 0.3)' // Subtle rose glass border
+    borderBottomColor: 'rgba(212, 83, 126, 0.15)'
   },
   headerRow: {
     flexDirection: 'row',
@@ -1803,15 +2125,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12
   },
+  headerAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFF5F7',
+    borderWidth: 1.5,
+    borderColor: '#D4537E',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#D4537E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2
+  },
+  headerAvatarText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#D4537E'
+  },
   headerLogo: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: COLORS.roseDark,
-    letterSpacing: 1
+    color: '#D4537E',
+    letterSpacing: 0.5
   },
   headerWelcome: {
     fontSize: 13,
-    color: COLORS.textMuted,
+    color: '#888780',
     marginTop: 2
   },
   subscriptionBadge: {
@@ -1820,19 +2162,19 @@ const styles = StyleSheet.create({
     borderRadius: 12
   },
   badgeActive: {
-    backgroundColor: COLORS.goldAccent + '20',
+    backgroundColor: 'rgba(212, 83, 126, 0.1)',
     borderWidth: 1,
-    borderColor: COLORS.goldAccent
+    borderColor: '#D4537E'
   },
   badgeFree: {
-    backgroundColor: COLORS.greyLight,
+    backgroundColor: '#E8E6E0',
     borderWidth: 1,
-    borderColor: COLORS.glassBorder
+    borderColor: '#E8E6E0'
   },
   badgeText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: COLORS.textDark
+    color: '#2C2C2A'
   },
   scrollContent: {
     paddingBottom: 110
@@ -1846,10 +2188,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden'
   },
-  cameraFrame: {
-    flex: 1,
-    position: 'relative'
-  },
   overlayGuideContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1861,7 +2199,7 @@ const styles = StyleSheet.create({
     height: SCREEN_WIDTH * 0.85,
     borderRadius: 130,
     borderWidth: 3,
-    borderColor: COLORS.rosePrimary,
+    borderColor: '#D4537E',
     backgroundColor: 'transparent'
   },
   cameraOverlayTip: {
@@ -1874,456 +2212,133 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 16
   },
-  cameraControlsRow: {
-    position: 'absolute',
-    bottom: 24,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center'
-  },
-  secondaryRoundBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  btnIcon: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold'
-  },
-  captureButtonOuter: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    borderWidth: 4,
-    borderColor: '#FFF',
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
   captureButtonInner: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: COLORS.rosePrimary
-  },
-  placeholderSpacer: {
-    width: 50
-  },
-  permissionErrorCard: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#FFF'
-  },
-  paragraphCenter: {
-    textAlign: 'center',
-    fontSize: 14,
-    color: COLORS.textMuted,
-    marginBottom: 24
-  },
-  outlineButton: {
-    borderWidth: 2,
-    borderColor: COLORS.rosePrimary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 20
-  },
-  outlineButtonText: {
-    color: COLORS.rosePrimary,
-    fontSize: 15,
-    fontWeight: 'bold'
-  },
-  unifiedPageLayout: {
-    width: '100%',
-    padding: 0,
-    marginBottom: 24
-  },
-  unifiedGaugeContainer: {
-    alignItems: 'center',
-    marginVertical: 14
-  },
-  unifiedMapLayout: {
-    width: '100%',
-    marginBottom: 24
+    backgroundColor: '#D4537E'
   },
   tabTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: COLORS.textDark,
+    color: '#2C2C2A',
     marginBottom: 6
   },
   tabSubtitle: {
     fontSize: 14,
-    color: COLORS.textMuted,
+    color: '#888780',
     lineHeight: 22,
     marginBottom: 24
   },
-  forecastWidget: {
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
-    shadowColor: COLORS.shadowColor,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 2
-  },
-  forecastHeader: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    marginBottom: 16
-  },
-  forecastGreeting: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: COLORS.roseDark,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
-  },
-  forecastTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.textDark,
-    marginTop: 2
-  },
-  envSwitcher: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.04)',
-    borderRadius: 12,
-    padding: 3,
-    marginTop: 12,
-    width: '100%'
-  },
-  envSwitchBtn: {
-    flex: 1,
-    paddingVertical: 6,
+  insightsGaugeCard: {
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 9
+    marginVertical: 20
   },
-  envSwitchBtnActive: {
+  gaugeOuterRing: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    padding: 4,
+    backgroundColor: '#E8E6E0',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  gaugeInnerRing: {
+    flex: 1,
+    borderRadius: 76,
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  gaugeCenterWhite: {
+    width: 136,
+    height: 136,
+    borderRadius: 68,
     backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  gaugeScoreBig: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#D4537E'
+  },
+  gaugeScoreLabelText: {
+    fontSize: 12,
+    color: '#888780',
+    fontWeight: '500',
+    marginTop: 4
+  },
+  deltaBadgePill: {
+    marginTop: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: '#EAF5EC'
+  },
+  deltaBadgeText: {
+    fontSize: 12,
+    color: '#639922',
+    fontWeight: 'bold'
+  },
+  prosConsCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E8E6E0',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
     elevation: 1
   },
-  envSwitchText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: COLORS.textMuted
-  },
-  envSwitchTextActive: {
-    color: COLORS.textDark,
-    fontWeight: 'bold'
-  },
-  forecastStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.45)',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    marginBottom: 16
-  },
-  forecastStatItem: {
+  prosConsColumn: {
     flex: 1,
-    alignItems: 'center'
+    paddingHorizontal: 4
   },
-  forecastStatLabel: {
-    fontSize: 8,
+  prosConsHeader: {
+    fontSize: 14,
     fontWeight: 'bold',
-    color: COLORS.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: 4
+    marginBottom: 8
   },
-  forecastStatValue: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.textDark
+  prosConsBullet: {
+    fontSize: 12,
+    color: '#888780',
+    marginVertical: 3
   },
-  forecastStatDivider: {
+  prosConsDivider: {
     width: 1,
-    height: 24,
-    backgroundColor: COLORS.glassBorder
-  },
-  forecastAlertBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.roseLight + '40',
-    borderRadius: 14,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(242, 160, 161, 0.15)'
-  },
-  forecastAlertBadge: {
-    backgroundColor: '#FFF',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder
-  },
-  forecastAlertBadgeText: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: COLORS.roseDark
-  },
-  forecastAlertTip: {
-    fontSize: 11,
-    color: COLORS.textDark,
-    flex: 1,
-    lineHeight: 15
-  },
-  unifiedScanDeck: {
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
-    shadowColor: COLORS.shadowColor,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 2
-  },
-  deckTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.textDark,
-    marginBottom: 4
-  },
-  deckSubtitle: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    lineHeight: 18,
-    marginBottom: 18
-  },
-  deckActionsList: {
-    width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.45)',
-    borderRadius: 16,
-    paddingVertical: 4,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder
-  },
-  deckActionRowBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    width: '100%'
-  },
-  deckActionRowIcon: {
-    fontSize: 20
-  },
-  deckActionRowTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.textDark
-  },
-  deckActionRowDesc: {
-    fontSize: 10,
-    color: COLORS.textMuted,
-    marginTop: 2
-  },
-  deckActionRowChevron: {
-    fontSize: 14,
-    color: COLORS.roseDark,
-    fontWeight: 'bold'
-  },
-  deckActionDivider: {
-    height: 1,
-    backgroundColor: COLORS.glassBorder,
-    marginHorizontal: 16
-  },
-  deckDivider: {
-    height: 1,
-    backgroundColor: COLORS.glassBorder,
-    marginVertical: 16
-  },
-  deckConsentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between'
-  },
-  deckConsentTitle: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: COLORS.textDark,
-    marginBottom: 2
-  },
-  deckConsentDesc: {
-    fontSize: 10,
-    color: COLORS.textMuted,
-    lineHeight: 14
-  },
-  deckTipsSection: {
-    paddingVertical: 2
-  },
-  deckTipsTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: COLORS.textDark,
-    marginBottom: 6
-  },
-  deckTipsItem: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    lineHeight: 16,
-    marginBottom: 4
-  },
-  disclaimerContainer: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.glassBorder,
-    paddingTop: 16
-  },
-  disclaimerText: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    lineHeight: 16
-  },
-  gaugeContainerCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: COLORS.shadowColor,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 20
-  },
-  scanDateHeader: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    marginBottom: 16,
-    fontWeight: '600'
-  },
-  circularGauge: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    padding: 4,
-    backgroundColor: COLORS.glassBorder,
-    marginBottom: 20
-  },
-  circularGaugeGradient: {
-    flex: 1,
-    borderRadius: 71,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  circularGaugeInner: {
-    width: 124,
-    height: 124,
-    borderRadius: 62,
-    backgroundColor: '#FFF',
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  gaugeScoreText: {
-    fontSize: 42,
-    fontWeight: '800',
-    color: COLORS.roseDark
-  },
-  gaugeScoreLabel: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    fontWeight: '600',
-    marginTop: 2
-  },
-  generalSummaryText: {
-    fontSize: 14,
-    color: COLORS.textDark,
-    textAlign: 'center',
-    lineHeight: 22
-  },
-  compareDeltaCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 24
-  },
-  compareDeltaTitle: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: COLORS.textDark,
-    marginBottom: 12
-  },
-  deltaListRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between'
-  },
-  deltaItemCol: {
-    flex: 0.3,
-    alignItems: 'center'
-  },
-  deltaItemLabel: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginBottom: 4
-  },
-  deltaItemValue: {
-    fontSize: 12,
-    fontWeight: 'bold'
+    backgroundColor: '#E8E6E0',
+    marginHorizontal: 8
   },
   sectionHeaderTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.textDark,
+    color: '#2C2C2A',
     marginTop: 10,
     marginBottom: 14
   },
   dimensionCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E8E6E0',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
-    shadowColor: COLORS.shadowColor,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1
   },
   dimHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center'
-  },
-  dimScoreColRight: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  dimSubHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
-    marginBottom: 4
-  },
-  dimDeltaText: {
-    fontSize: 10,
-    fontWeight: '600'
   },
   dimTitleCol: {
     flexDirection: 'row',
@@ -2336,7 +2351,11 @@ const styles = StyleSheet.create({
   dimName: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.textDark
+    color: '#2C2C2A'
+  },
+  dimScoreColRight: {
+    flexDirection: 'row',
+    alignItems: 'center'
   },
   dimScoreBadge: {
     paddingVertical: 4,
@@ -2348,31 +2367,276 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFF'
   },
+  chevronIcon: {
+    fontSize: 10,
+    color: '#888780',
+    marginLeft: 8
+  },
+  dimSubHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 4
+  },
+  statusBadge: {
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 8
+  },
+  statusBadgeText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5
+  },
+  metricProgressBg: {
+    height: 6,
+    width: '100%',
+    backgroundColor: '#E8E6E0',
+    borderRadius: 3,
+    marginTop: 8,
+    marginBottom: 4,
+    overflow: 'hidden'
+  },
+  metricProgressFill: {
+    height: '100%',
+    borderRadius: 3
+  },
+  tapToExpandText: {
+    fontSize: 10,
+    color: '#888780',
+    textAlign: 'center',
+    marginTop: 6,
+    fontStyle: 'italic'
+  },
+  expandedContentBlock: {
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E8E6E0',
+    paddingTop: 10
+  },
   dimExplanation: {
     fontSize: 13,
-    color: COLORS.textMuted,
+    color: '#888780',
     lineHeight: 18
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#E8E6E0',
+    marginVertical: 10
+  },
+  ingredientsRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+    alignItems: 'flex-start'
+  },
+  ingredientsTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#2C2C2A',
+    width: 90
+  },
+  ingredientsValue: {
+    fontSize: 11,
+    color: '#888780',
+    flex: 1
+  },
+  actionRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    alignItems: 'flex-start'
+  },
+  actionTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#2C2C2A',
+    width: 90
+  },
+  actionValue: {
+    fontSize: 11,
+    color: '#888780',
+    flex: 1,
+    lineHeight: 15
+  },
+  cardActionLink: {
+    alignSelf: 'flex-end',
+    paddingVertical: 4
+  },
+  cardActionLinkText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#D4537E'
   },
   emptyStateCard: {
     backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E8E6E0',
     borderRadius: 24,
     padding: 30,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder
+    alignItems: 'center'
   },
   emptyStateTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.textDark,
+    color: '#2C2C2A',
     marginBottom: 8
   },
   emptyStateText: {
     fontSize: 14,
-    color: COLORS.textMuted,
+    color: '#888780',
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 24
+  },
+  primaryButton: {
+    width: '100%',
+    backgroundColor: '#D4537E',
+    paddingVertical: 14,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#D4537E',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFF'
+  },
+  horizontalProductsScroll: {
+    paddingBottom: 8
+  },
+  recomProductCard: {
+    width: 160,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E8E6E0',
+    borderRadius: 16,
+    padding: 12,
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1
+  },
+  recomProductBadgeContainer: {
+    flexDirection: 'row',
+    marginBottom: 8
+  },
+  recomProductBadge: {
+    fontSize: 9,
+    color: '#FFF',
+    fontWeight: '600',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 999
+  },
+  recomProductImage: {
+    width: '100%',
+    height: 100,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#E8E6E0'
+  },
+  recomProductBrand: {
+    fontSize: 10,
+    color: '#888780',
+    fontWeight: 'bold',
+    textTransform: 'uppercase'
+  },
+  recomProductName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2C2C2A',
+    marginTop: 2
+  },
+  recomProductPrice: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#D4537E',
+    marginTop: 2,
+    marginBottom: 8
+  },
+  recomCTAButton: {
+    width: '100%',
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignItems: 'center'
+  },
+  recomCTAText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: 'bold'
+  },
+  recomDisclosure: {
+    fontSize: 9,
+    color: '#888780',
+    textAlign: 'center',
+    marginTop: 4
+  },
+  remediesList: {
+    width: '100%'
+  },
+  remedyRowCard: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E8E6E0',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1
+  },
+  remedyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  remedyNameText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#2C2C2A',
+    flex: 1
+  },
+  remedyTagPill: {
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    backgroundColor: '#FFF5F7',
+    borderWidth: 1,
+    borderColor: '#E8E6E0'
+  },
+  remedyTagText: {
+    fontSize: 9,
+    color: '#D4537E',
+    fontWeight: '600'
+  },
+  remedyInstruction: {
+    fontSize: 12,
+    color: '#888780',
+    lineHeight: 18,
+    marginBottom: 8
+  },
+  naturalBadge: {
+    flexDirection: 'row'
+  },
+  naturalBadgeText: {
+    fontSize: 10,
+    color: '#639922',
+    fontWeight: 'bold',
+    backgroundColor: '#EAF5EC',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 999
   },
   chartContainer: {
     backgroundColor: '#FFF',
@@ -2380,7 +2644,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 8,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
+    borderColor: '#E8E6E0',
     marginBottom: 24,
     alignItems: 'center'
   },
@@ -2389,28 +2653,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
+    borderColor: '#E8E6E0',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24
   },
   emptyChartText: {
     fontSize: 12,
-    color: COLORS.textMuted
+    color: '#888780'
   },
   gridLine: {
     position: 'absolute',
     left: 10,
     right: 10,
     height: 1,
-    backgroundColor: COLORS.greyLight
+    backgroundColor: '#E8E6E0'
   },
   chartDot: {
     position: 'absolute',
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: COLORS.roseDark,
+    backgroundColor: '#D4537E',
     borderWidth: 2,
     borderColor: '#FFF',
     zIndex: 10
@@ -2419,242 +2683,257 @@ const styles = StyleSheet.create({
     position: 'absolute',
     fontSize: 11,
     fontWeight: 'bold',
-    color: COLORS.roseDark,
+    color: '#D4537E',
     width: 24,
     textAlign: 'center'
   },
   chartDateLabel: {
     position: 'absolute',
     fontSize: 10,
-    color: COLORS.textMuted,
+    color: '#888780',
     width: 30,
     textAlign: 'center'
   },
   chartLine: {
     position: 'absolute',
     height: 3,
-    backgroundColor: COLORS.rosePrimary,
+    backgroundColor: '#D4537E',
     zIndex: 5
   },
-  historyTimelineCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+  timelineList: {
+    width: '100%'
+  },
+  timelineRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E8E6E0',
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 10,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)'
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1
   },
-  historyTimelineCardActive: {
-    borderColor: COLORS.rosePrimary,
-    backgroundColor: 'rgba(252, 236, 236, 0.8)'
+  timelineThumbFrame: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    overflow: 'hidden'
   },
-  historyRow: {
+  timelineThumbImage: {
+    width: '100%',
+    height: '100%'
+  },
+  timelineInfoCol: {
+    flex: 1,
+    marginLeft: 12
+  },
+  timelineDateText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2C2C2A'
+  },
+  timelineLabelText: {
+    fontSize: 11,
+    color: '#888780',
+    marginTop: 2
+  },
+  timelineBadgeCol: {
+    alignItems: 'flex-end',
+    marginRight: 12
+  },
+  timelineScoreBadge: {
+    backgroundColor: '#FFF5F7',
+    borderWidth: 1,
+    borderColor: '#E8E6E0',
+    borderRadius: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 6
+  },
+  timelineScoreText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#D4537E'
+  },
+  timelineDeltaBadge: {
+    marginTop: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 999
+  },
+  timelineDeltaText: {
+    fontSize: 9,
+    fontWeight: 'bold'
+  },
+  timelineChevron: {
+    fontSize: 12,
+    color: '#888780'
+  },
+  detailHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center'
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8E6E0'
   },
-  historyTextCol: {
-    flex: 0.7
-  },
-  historyDate: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textDark
-  },
-  historyGoals: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 2
-  },
-  historyScoreCol: {
-    alignItems: 'center'
-  },
-  historyScoreVal: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.roseDark
-  },
-  historyScoreLbl: {
-    fontSize: 8,
-    color: COLORS.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
-  },
-  productCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)'
-  },
-  productBadgeContainer: {
-    flexDirection: 'row',
-    marginBottom: 10
-  },
-  productBadge: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#FFF',
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 8
-  },
-  productRow: {
-    flexDirection: 'row',
-    marginBottom: 12
-  },
-  productImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 10,
-    marginRight: 14,
-    backgroundColor: COLORS.greyLight
-  },
-  productInfoCol: {
-    flex: 1,
-    justifyContent: 'center'
-  },
-  productBrand: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: COLORS.textMuted,
-    textTransform: 'uppercase'
-  },
-  productName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textDark,
-    marginTop: 2
-  },
-  productPrice: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: COLORS.roseDark,
-    marginTop: 4
-  },
-  productReason: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    lineHeight: 18,
-    marginBottom: 14
-  },
-  affiliateLinkButton: {
-    backgroundColor: COLORS.rosePrimary,
-    paddingVertical: 10,
-    borderRadius: 16,
-    alignItems: 'center'
-  },
-  affiliateBtnText: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: 'bold'
-  },
-  affiliateDisclosure: {
-    fontSize: 9,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: 6
-  },
-  profileSummaryCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)'
-  },
-  profileNameTitle: {
+  detailHeaderTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.textDark,
-    marginBottom: 8
+    color: '#2C2C2A'
   },
-  profileMetaLabel: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    marginTop: 4
-  },
-  devCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+  detailTopCard: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E8E6E0',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)'
-  },
-  devLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textDark,
-    marginBottom: 8
-  },
-  devInput: {
-    height: 40,
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    fontSize: 13,
-    color: COLORS.textDark,
-    backgroundColor: COLORS.bgLight
-  },
-  devHelpText: {
-    fontSize: 10,
-    color: COLORS.textMuted,
-    marginTop: 6,
-    lineHeight: 14
-  },
-  devSyncButton: {
-    backgroundColor: COLORS.roseDark,
-    borderRadius: 8,
-    paddingVertical: 10,
-    marginTop: 12,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  devSyncButtonText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  deleteButton: {
-    backgroundColor: '#FFF',
-    borderWidth: 1.5,
-    borderColor: COLORS.roseDark,
-    paddingVertical: 12,
-    borderRadius: 16,
-    alignItems: 'center',
     marginBottom: 20
   },
-  deleteButtonText: {
-    color: COLORS.roseDark,
-    fontSize: 13,
+  detailImageRow: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  detailThumbFrame: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    overflow: 'hidden'
+  },
+  detailThumbImage: {
+    width: '100%',
+    height: '100%'
+  },
+  detailDateText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2C2C2A'
+  },
+  detailTimeText: {
+    fontSize: 12,
+    color: '#888780',
+    marginTop: 2
+  },
+  detailScoreBadge: {
+    alignItems: 'center',
+    backgroundColor: '#FFF5F7',
+    borderWidth: 1,
+    borderColor: '#E8E6E0',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12
+  },
+  detailScoreNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#D4537E'
+  },
+  detailScoreLabel: {
+    fontSize: 9,
+    color: '#888780'
+  },
+  profileAvatarCard: {
+    alignItems: 'center',
+    marginVertical: 20
+  },
+  profileAvatarBig: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FFF5F7',
+    borderWidth: 2,
+    borderColor: '#D4537E',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#D4537E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6
+  },
+  profileAvatarTextBig: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#D4537E'
+  },
+  profileNameBig: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2C2C2A',
+    marginTop: 12
+  },
+  profileProBadge: {
+    marginTop: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+    borderRadius: 999
+  },
+  profileProText: {
+    fontSize: 10,
+    color: '#FFF',
     fontWeight: 'bold'
   },
-  policyCard: {
-    backgroundColor: COLORS.greyLight,
-    padding: 16,
-    borderRadius: 16
+  profileStatsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E8E6E0',
+    borderRadius: 16,
+    paddingVertical: 16,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1
   },
-  policyHeader: {
-    fontSize: 13,
+  profileStatBox: {
+    flex: 1,
+    alignItems: 'center'
+  },
+  profileStatNumber: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: COLORS.textDark,
-    marginBottom: 8
+    color: '#D4537E'
   },
-  policyDesc: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    lineHeight: 16,
-    marginBottom: 6
-  },
-  policyDisclaimerText: {
+  profileStatLabel: {
     fontSize: 10,
-    color: COLORS.roseDark,
-    marginTop: 12,
+    color: '#888780',
+    marginTop: 4
+  },
+  profileStatDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#E8E6E0'
+  },
+  settingsListCardContainer: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E8E6E0',
+    borderRadius: 16,
+    overflow: 'hidden'
+  },
+  settingItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16
+  },
+  settingItemLabel: {
+    fontSize: 14,
     fontWeight: '500',
-    lineHeight: 14
+    color: '#2C2C2A'
+  },
+  settingItemChevron: {
+    fontSize: 12,
+    color: '#888780'
+  },
+  settingDivider: {
+    height: 1,
+    backgroundColor: '#E8E6E0'
   },
   paywallWrapper: {
     flex: 1
@@ -2674,7 +2953,7 @@ const styles = StyleSheet.create({
   },
   paywallCloseIcon: {
     fontSize: 14,
-    color: COLORS.textDark,
+    color: '#2C2C2A',
     fontWeight: '600'
   },
   paywallScroll: {
@@ -2683,28 +2962,53 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   paywallTitle: {
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: '800',
-    color: COLORS.roseDark,
-    letterSpacing: 1
+    color: '#D4537E',
+    marginTop: 12,
+    textAlign: 'center'
   },
   paywallSubtitle: {
-    fontSize: 15,
-    color: COLORS.textMuted,
+    fontSize: 14,
+    color: '#888780',
     marginTop: 6,
-    marginBottom: 16
+    marginBottom: 24,
+    textAlign: 'center'
   },
-  socialProofBox: {
-    backgroundColor: COLORS.roseLight,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginBottom: 24
+  paywallPriceCardsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 20
   },
-  socialProofText: {
-    fontSize: 12,
-    color: COLORS.roseDark,
-    fontWeight: '500'
+  paywallPriceCard: {
+    width: '48%',
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    position: 'relative'
+  },
+  paywallPriceCardSelected: {
+    borderColor: '#D4537E',
+    borderWidth: 1.5,
+    backgroundColor: '#FFF5F7'
+  },
+  paywallPriceTier: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#2C2C2A'
+  },
+  paywallPriceVal: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2C2C2A',
+    marginTop: 4
+  },
+  paywallPriceDesc: {
+    fontSize: 11,
+    color: '#888780',
+    marginTop: 4
   },
   perkList: {
     width: '100%',
@@ -2717,62 +3021,25 @@ const styles = StyleSheet.create({
   },
   perkIcon: {
     fontSize: 18,
-    color: COLORS.greenSuccess,
+    color: '#639922',
     fontWeight: 'bold',
     marginRight: 14
   },
   perkTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: COLORS.textDark
+    color: '#2C2C2A'
   },
   perkDesc: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: '#888780',
     marginTop: 2
-  },
-  priceCard: {
-    width: '100%',
-    backgroundColor: '#FFF',
-    borderWidth: 1.5,
-    borderColor: COLORS.glassBorder,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    position: 'relative'
-  },
-  priceCardActive: {
-    borderColor: COLORS.rosePrimary,
-    backgroundColor: COLORS.roseLight + '30'
-  },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  priceTier: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: COLORS.textDark
-  },
-  priceVal: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.textDark
-  },
-  priceActiveText: {
-    color: COLORS.roseDark
-  },
-  priceDesc: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 4
   },
   bestValueBadge: {
     position: 'absolute',
     top: -10,
     right: 16,
-    backgroundColor: COLORS.goldAccent,
+    backgroundColor: '#BA7517',
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: 8
@@ -2783,8 +3050,8 @@ const styles = StyleSheet.create({
     color: '#FFF'
   },
   paywallTerms: {
-    fontSize: 9,
-    color: COLORS.textMuted,
+    fontSize: 10,
+    color: '#888780',
     textAlign: 'center',
     marginTop: 20,
     lineHeight: 14
@@ -2794,9 +3061,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)', // Ultra-reduced opacity for true glassmorphic backdrop
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(242, 160, 161, 0.22)', // Subtle rose glass border
+    borderTopColor: 'rgba(212, 83, 126, 0.22)',
     overflow: 'hidden'
   },
   bottomTabRow: {
@@ -2812,411 +3079,16 @@ const styles = StyleSheet.create({
     height: 48,
     zIndex: 10
   },
-  tabButtonActive: {
-    // Active styling text changes are handled in index.tsx
-  },
-  activeTabIndicator: {
-    position: 'absolute',
-    top: 6,
-    height: 48,
-    width: (SCREEN_WIDTH / 5) - 16,
-    borderRadius: 14,
-    backgroundColor: 'rgba(242, 160, 161, 0.22)', // Warm rose glass active capsule instead of pure white
-    borderWidth: 1.2,
-    borderColor: 'rgba(216, 122, 125, 0.35)', // Rose border highlights the boundary beautifully against light background
-    overflow: 'hidden',
-    shadowColor: COLORS.roseDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 1
-  },
-  primaryConcernBadge: {
-    backgroundColor: '#FFF5F5',
-    borderWidth: 1,
-    borderColor: COLORS.rosePrimary,
-    borderRadius: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    alignSelf: 'center',
-    shadowColor: COLORS.roseDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2
-  },
-  primaryConcernText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.roseDark,
-    textAlign: 'center'
-  },
-  statusBadge: {
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    alignSelf: 'center'
-  },
-  statusBadgeText: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
-  },
-  chevronIcon: {
-    fontSize: 10,
-    color: COLORS.textMuted,
-    marginLeft: 8,
-    alignSelf: 'center'
-  },
-  metricProgressBg: {
-    height: 6,
-    width: '100%',
-    backgroundColor: COLORS.greyLight,
-    borderRadius: 3,
-    marginTop: 8,
-    marginBottom: 4,
-    overflow: 'hidden'
-  },
-  metricProgressFill: {
-    height: '100%',
-    borderRadius: 3
-  },
-  tapToExpandText: {
-    fontSize: 10,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: 6,
-    fontStyle: 'italic'
-  },
-  expandedContentBlock: {
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.greyLight,
-    paddingTop: 10
-  },
-  cardDivider: {
-    height: 1,
-    backgroundColor: COLORS.greyLight,
-    marginVertical: 10
-  },
-  ingredientsRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-    alignItems: 'flex-start'
-  },
-  ingredientsTitle: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: COLORS.textDark,
-    width: 90
-  },
-  ingredientsValue: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    flex: 1
-  },
-  actionRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    alignItems: 'flex-start'
-  },
-  actionTitle: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: COLORS.textDark,
-    width: 90
-  },
-  actionValue: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    flex: 1,
-    lineHeight: 15
-  },
-  cardActionLink: {
-    alignSelf: 'flex-end',
-    paddingVertical: 4
-  },
-  cardActionLinkText: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: COLORS.roseDark
-  },
-  headerAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: COLORS.roseLight,
-    borderWidth: 1.5,
-    borderColor: COLORS.rosePrimary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.roseDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2
-  },
-  headerAvatarText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.roseDark
-  },
-  scanGridOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'space-around',
-    paddingVertical: 30
-  },
-  scanGridRow: {
-    height: 0.8,
-    width: '100%',
-    backgroundColor: 'rgba(242, 160, 161, 0.22)'
-  },
-  scanGridCol: {
-    width: 0.8,
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(242, 160, 161, 0.22)'
-  },
-  scanTargetRing: {
-    position: 'absolute',
-    top: '15%',
-    left: '15%',
-    width: '70%',
-    height: '70%',
-    borderRadius: 150,
-    borderWidth: 1.2,
-    borderColor: 'rgba(242, 160, 161, 0.28)',
-    borderStyle: 'dashed'
-  },
-  scanCrosshairV: {
-    position: 'absolute',
-    top: '42%',
-    bottom: '42%',
-    left: '50%',
-    width: 1.5,
-    backgroundColor: COLORS.rosePrimary,
-    opacity: 0.45
-  },
-  scanCrosshairH: {
-    position: 'absolute',
-    left: '42%',
-    right: '42%',
-    top: '50%',
-    height: 1.5,
-    backgroundColor: COLORS.rosePrimary,
-    opacity: 0.45
-  },
   tabBtnIcon: {
     fontSize: 20
   },
   tabBtnText: {
     fontSize: 10,
-    color: COLORS.textMuted,
+    color: '#888780',
     fontWeight: '500',
     marginTop: 4
   },
   tabBtnTextActive: {
-    color: COLORS.roseDark,
-    fontWeight: 'bold'
-  },
-  scannerWrapper: {
-    width: SCREEN_WIDTH * 0.75,
-    height: SCREEN_WIDTH * 0.75,
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: COLORS.rosePrimary,
-    position: 'relative',
-    backgroundColor: '#FFF',
-    elevation: 6,
-    shadowColor: COLORS.shadowColor,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 16,
-    marginTop: 20
-  },
-  scannerImage: {
-    width: '100%',
-    height: '100%'
-  },
-  scannerImagePlaceholder: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.bgLight
-  },
-  laserLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 4,
-    backgroundColor: COLORS.roseDark,
-    shadowColor: COLORS.roseDark,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    elevation: 5,
-    zIndex: 10
-  },
-  pulseDot: {
-    position: 'absolute',
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: COLORS.roseDark,
-    borderWidth: 2,
-    borderColor: '#FFF',
-    marginLeft: -7,
-    marginTop: -7,
-    shadowColor: COLORS.roseDark,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 3,
-    zIndex: 11
-  },
-  faceMapContainerCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-    shadowColor: COLORS.shadowColor,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 3,
-    width: '100%',
-    alignItems: 'stretch'
-  },
-  faceMapTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.textDark,
-    textAlign: 'center'
-  },
-  faceMapSubtitle: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 2,
-    marginBottom: 16,
-    textAlign: 'center'
-  },
-  facePhotoWrapper: {
-    width: '100%',
-    aspectRatio: 1, // Strict 1:1 aspect ratio ensures coordinates map accurately to facial contours
-    borderRadius: 20,
-    overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: COLORS.greyLight
-  },
-  facePhotoImg: {
-    width: '100%',
-    height: '100%'
-  },
-  hotspotDot: {
-    position: 'absolute',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(216, 122, 125, 0.95)',
-    borderWidth: 2,
-    borderColor: '#FFF',
-    marginLeft: -14,
-    marginTop: -14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.roseDark,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.6,
-    shadowRadius: 5,
-    elevation: 4,
-    zIndex: 15
-  },
-  hotspotDotActive: {
-    backgroundColor: COLORS.textDark,
-    borderColor: COLORS.goldAccent,
-    transform: [{ scale: 1.25 }]
-  },
-  hotspotDotEmoji: {
-    fontSize: 12,
-    color: '#FFF'
-  },
-  activeConcernOverlayCard: {
-    width: '100%',
-    backgroundColor: COLORS.roseLight + '50',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.roseMuted,
-    padding: 14,
-    marginTop: 16
-  },
-  activeConcernRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6
-  },
-  activeConcernLabel: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: COLORS.roseDark
-  },
-  closeConcernText: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    padding: 4,
-    fontWeight: 'bold'
-  },
-  activeConcernDescription: {
-    fontSize: 12,
-    color: COLORS.textDark,
-    lineHeight: 18
-  },
-  noActiveConcernCard: {
-    width: '100%',
-    backgroundColor: COLORS.bgLight,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-    padding: 12,
-    marginTop: 16
-  },
-  noActiveConcernText: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    lineHeight: 16
-  },
-  authTabsRow: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    backgroundColor: 'rgba(0,0,0,0.04)',
-    borderRadius: 14,
-    padding: 4
-  },
-  authTab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 10
-  },
-  authTabActive: {
-    backgroundColor: '#FFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 1
-  },
-  authTabText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: COLORS.textMuted
   },
   authTabActiveText: {
     color: COLORS.roseDark
