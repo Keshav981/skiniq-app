@@ -776,6 +776,139 @@ export default function AppIndex() {
     );
   };
 
+  const renderScanDetailPopup = () => {
+    if (!selectedPastScan) return null;
+
+    return (
+      <View style={[StyleSheet.absoluteFillObject, { zIndex: 999998, backgroundColor: COLORS.bgLight }]}>
+        <SafeAreaView style={{ flex: 1 }}>
+          {/* Header Row */}
+          <View style={styles.detailHeaderRow}>
+            <TouchableOpacity 
+              style={styles.previewPanelCloseBtn} 
+              onPress={() => setSelectedPastScan(null)}
+            >
+              <Text style={{ fontSize: 16, color: COLORS.textDark, fontWeight: 'bold' }}>✕ Close</Text>
+            </TouchableOpacity>
+            <Text style={styles.detailHeaderTitle}>Scan Details</Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          <ScrollView contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 20 }]}>
+            {/* Date Indicator */}
+            <View style={styles.detailTopCard}>
+              <Text style={styles.detailDateText}>
+                {new Date(selectedPastScan.createdAt).toLocaleDateString('en-IN', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric'
+                })}
+              </Text>
+              <Text style={styles.detailTimeText}>
+                {new Date(selectedPastScan.createdAt).toLocaleTimeString('en-IN', {
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </Text>
+            </View>
+
+            {/* Score Gauge Circle */}
+            <View style={styles.insightsGaugeCard}>
+              <View style={styles.gaugeOuterRing}>
+                <LinearGradient
+                  colors={[COLORS.rosePrimary, '#FFF']}
+                  style={styles.gaugeInnerRing}
+                >
+                  <View style={styles.gaugeCenterWhite}>
+                    <Text style={styles.gaugeScoreBig}>{selectedPastScan.scores.overall}</Text>
+                    <Text style={styles.gaugeScoreLabelText}>Overall Score</Text>
+                  </View>
+                </LinearGradient>
+              </View>
+            </View>
+
+            {/* Pros/Cons Summary Card */}
+            <View style={styles.prosConsCard}>
+              {/* Left: Strengths */}
+              <View style={styles.prosConsColumn}>
+                <Text style={[styles.prosConsHeader, { color: COLORS.greenSuccess }]}>Strengths</Text>
+                <Text style={styles.prosConsBullet}>• {selectedPastScan.scores.hydration >= 60 ? 'Healthy moisture' : 'Strong barrier'}</Text>
+                <Text style={styles.prosConsBullet}>• {selectedPastScan.scores.pores < 50 ? 'Refined pores' : 'Vibrant skin tone'}</Text>
+              </View>
+              <View style={styles.prosConsDivider} />
+              {/* Right: Watch out */}
+              <View style={styles.prosConsColumn}>
+                <Text style={[styles.prosConsHeader, { color: COLORS.goldAccent }]}>Watch out</Text>
+                <Text style={styles.prosConsBullet}>• {selectedPastScan.scores.hydration < 60 ? 'Cheek dehydration' : 'T-zone shine'}</Text>
+                <Text style={styles.prosConsBullet}>• {selectedPastScan.scores.pores >= 50 ? 'Nasal pore shadows' : 'UV spotting risk'}</Text>
+              </View>
+            </View>
+
+            <Text style={styles.sectionHeaderTitle}>Skin Dimension Breakdowns</Text>
+
+            {/* 7 Dimension Cards */}
+            {Object.keys(DIMENSION_METADATA).map(dimKey => {
+              const score = selectedPastScan.scores[dimKey as keyof ScanScores];
+              const explanation = selectedPastScan.explanations[dimKey as keyof ScanExplanations];
+              const metadata = DIMENSION_METADATA[dimKey as keyof typeof DIMENSION_METADATA];
+              const status = getMetricStatus(dimKey, score);
+              const isExpanded = expandedDim === dimKey;
+
+              return (
+                <TouchableOpacity
+                  key={dimKey}
+                  activeOpacity={0.9}
+                  style={styles.dimensionCard}
+                  onPress={() => setExpandedDim(isExpanded ? null : dimKey)}
+                >
+                  <View style={styles.dimHeaderRow}>
+                    <View style={styles.dimTitleCol}>
+                      <Text style={styles.dimIcon}>{metadata.icon}</Text>
+                      <Text style={styles.dimName}>{metadata.label}</Text>
+                    </View>
+                    <View style={styles.dimScoreColRight}>
+                      <View style={[styles.dimScoreBadge, { backgroundColor: metadata.color }]}>
+                        <Text style={styles.dimScoreText}>{score}/100</Text>
+                      </View>
+                      <Text style={styles.chevronIcon}>{isExpanded ? '▲' : '▼'}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.dimSubHeaderRow}>
+                    <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+                      <Text style={[styles.statusBadgeText, { color: status.color }]}>{status.label}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.metricProgressBg}>
+                    <View style={[styles.metricProgressFill, { width: `${score}%`, backgroundColor: COLORS.rosePrimary }]} />
+                  </View>
+
+                  {isExpanded ? (
+                    <View style={styles.expandedContentBlock}>
+                      <Text style={styles.dimExplanation}>{explanation}</Text>
+                      <View style={styles.cardDivider} />
+                      <View style={styles.ingredientsRow}>
+                        <Text style={styles.ingredientsTitle}>🔬 Key Actives:</Text>
+                        <Text style={styles.ingredientsValue}>{dimIngredients[dimKey]}</Text>
+                      </View>
+                      <View style={styles.actionRow}>
+                        <Text style={styles.actionTitle}>⚡ Action Plan:</Text>
+                        <Text style={styles.actionValue}>{dimActions[dimKey]}</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <Text style={styles.tapToExpandText}>Tap card to review clinical analysis & actives plan</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </SafeAreaView>
+      </View>
+    );
+  };
+
   const renderDesignPreviewPanel = () => {
     return (
       <>
@@ -788,78 +921,83 @@ export default function AppIndex() {
           <Text style={styles.floatingPreviewToggleText}>Inspect</Text>
         </TouchableOpacity>
 
-        {/* Panel Modal */}
-        <Modal
-          visible={previewPanelOpen}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setPreviewPanelOpen(false)}
-        >
-          <View style={styles.previewPanelModalOverlay}>
-            <View style={styles.previewPanelModalContent}>
-              <View style={styles.previewPanelHeader}>
-                <Text style={styles.previewPanelTitle}>✨ Screen Inspector</Text>
-                <TouchableOpacity 
-                  style={styles.previewPanelCloseBtn}
-                  onPress={() => setPreviewPanelOpen(false)}
-                >
-                  <Text style={{ fontSize: 16, color: COLORS.textDark, fontWeight: 'bold' }}>✕</Text>
-                </TouchableOpacity>
+        {/* Panel View Overlay instead of Modal */}
+        {previewPanelOpen && (
+          <View style={[StyleSheet.absoluteFillObject, { zIndex: 999999 }]}>
+            <TouchableOpacity 
+              activeOpacity={1}
+              style={styles.previewPanelModalOverlay}
+              onPress={() => setPreviewPanelOpen(false)}
+            >
+              <View 
+                style={styles.previewPanelModalContent}
+                onStartShouldSetResponder={() => true}
+                onTouchEnd={(e) => e.stopPropagation()}
+              >
+                <View style={styles.previewPanelHeader}>
+                  <Text style={styles.previewPanelTitle}>✨ Screen Inspector</Text>
+                  <TouchableOpacity 
+                    style={styles.previewPanelCloseBtn}
+                    onPress={() => setPreviewPanelOpen(false)}
+                  >
+                    <Text style={{ fontSize: 16, color: COLORS.textDark, fontWeight: 'bold' }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView contentContainerStyle={styles.previewPanelScroll}>
+                  <TouchableOpacity 
+                    style={[styles.previewScreenBtn, !isPreviewActive && styles.previewScreenBtnActive]}
+                    onPress={() => {
+                      setIsPreviewActive(false);
+                      setPreviewScreenId(null);
+                      setIsAnalyzing(false);
+                      setPaywallVisible(false);
+                      setSelectedPastScan(null);
+                      setPreviewPanelOpen(false);
+                    }}
+                  >
+                    <Text style={[styles.previewScreenBtnText, !isPreviewActive && { color: '#FFF' }]}>
+                      🟢 Live Mode (Interactive)
+                    </Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.previewSeparator} />
+
+                  {[
+                    { id: 1, name: '1. Splash / Welcome' },
+                    { id: 2, name: '2. Onboarding: Skin Type' },
+                    { id: 3, name: '3. Onboarding: Skin Goals' },
+                    { id: 4, name: '4. Onboarding: Age Range' },
+                    { id: 5, name: '5. Camera Capture Viewfinder' },
+                    { id: 6, name: '6. Analysis Loading Spinner' },
+                    { id: 7, name: '7. Insights / Skin Results' },
+                    { id: 8, name: '8. Recommendations / Remedies' },
+                    { id: 9, name: '9. Skin Journey Trend Chart' },
+                    { id: 10, name: '10. Scan Detail Comparison' },
+                    { id: 11, name: '11. Subscription Paywall' },
+                    { id: 12, name: '12. Settings / User Profile' }
+                  ].map(screen => {
+                    const isCurrent = isPreviewActive && previewScreenId === screen.id;
+                    return (
+                      <TouchableOpacity
+                        key={screen.id}
+                        style={[styles.previewScreenBtn, isCurrent && styles.previewScreenBtnActive]}
+                        onPress={() => {
+                          triggerPreviewScreen(screen.id);
+                          setPreviewPanelOpen(false);
+                        }}
+                      >
+                        <Text style={[styles.previewScreenBtnText, isCurrent && { color: '#FFF', fontWeight: 'bold' }]}>
+                          {screen.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
-
-              <ScrollView contentContainerStyle={styles.previewPanelScroll}>
-                <TouchableOpacity 
-                  style={[styles.previewScreenBtn, !isPreviewActive && styles.previewScreenBtnActive]}
-                  onPress={() => {
-                    setIsPreviewActive(false);
-                    setPreviewScreenId(null);
-                    setIsAnalyzing(false);
-                    setPaywallVisible(false);
-                    setSelectedPastScan(null);
-                    setPreviewPanelOpen(false);
-                  }}
-                >
-                  <Text style={[styles.previewScreenBtnText, !isPreviewActive && { color: '#FFF' }]}>
-                    🟢 Live Mode (Interactive)
-                  </Text>
-                </TouchableOpacity>
-
-                <View style={styles.previewSeparator} />
-
-                {[
-                  { id: 1, name: '1. Splash / Welcome' },
-                  { id: 2, name: '2. Onboarding: Skin Type' },
-                  { id: 3, name: '3. Onboarding: Skin Goals' },
-                  { id: 4, name: '4. Onboarding: Age Range' },
-                  { id: 5, name: '5. Camera Capture Viewfinder' },
-                  { id: 6, name: '6. Analysis Loading Spinner' },
-                  { id: 7, name: '7. Insights / Skin Results' },
-                  { id: 8, name: '8. Recommendations / Remedies' },
-                  { id: 9, name: '9. Skin Journey Trend Chart' },
-                  { id: 10, name: '10. Scan Detail Comparison' },
-                  { id: 11, name: '11. Subscription Paywall' },
-                  { id: 12, name: '12. Settings / User Profile' }
-                ].map(screen => {
-                  const isCurrent = isPreviewActive && previewScreenId === screen.id;
-                  return (
-                    <TouchableOpacity
-                      key={screen.id}
-                      style={[styles.previewScreenBtn, isCurrent && styles.previewScreenBtnActive]}
-                      onPress={() => {
-                        triggerPreviewScreen(screen.id);
-                        setPreviewPanelOpen(false);
-                      }}
-                    >
-                      <Text style={[styles.previewScreenBtnText, isCurrent && { color: '#FFF', fontWeight: 'bold' }]}>
-                        {screen.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
+            </TouchableOpacity>
           </View>
-        </Modal>
+        )}
       </>
     );
   };
@@ -1737,12 +1875,8 @@ export default function AppIndex() {
       </ScrollView>
 
       {/* Screen 11: Subscription Paywall Modal */}
-      <Modal
-        visible={paywallVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setPaywallVisible(false)}
-      >
+      {paywallVisible && (
+        <View style={[StyleSheet.absoluteFillObject, { zIndex: 999997 }]}>
         <LinearGradient
           colors={[COLORS.bgLight, '#FFF']}
           style={styles.paywallWrapper}
@@ -1830,7 +1964,8 @@ export default function AppIndex() {
             </Text>
           </ScrollView>
         </LinearGradient>
-      </Modal>
+        </View>
+      )}
 
       {/* Bottom Navigation Tabs Bar */}
       <BlurView
