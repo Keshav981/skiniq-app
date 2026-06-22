@@ -127,11 +127,11 @@ const dimActions: Record<string, string> = {
 
 export default function AppIndex() {
   const {
-    profile,
-    scans,
+    profile: realProfile,
+    scans: realScans,
     recommendedProducts,
-    subscription,
-    currentScan,
+    subscription: realSubscription,
+    currentScan: realCurrentScan,
     loading,
     backendUrl,
     setBackendUrl,
@@ -146,6 +146,145 @@ export default function AppIndex() {
     lastScanImageBase64
   } = useApp();
 
+  // Mock data for Design Review Preview Inspector Mode
+  const MOCK_PROFILE = {
+    name: 'Aishwarya',
+    age: '26–35',
+    skinType: 'combination',
+    goals: ['Brightening', 'Hydration', 'Anti-aging']
+  };
+
+  const MOCK_SCANS: Scan[] = [
+    {
+      id: 'scan-1',
+      createdAt: new Date().toISOString(),
+      imageUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300',
+      scores: {
+        overall: 84,
+        hydration: 88,
+        texture: 79,
+        pores: 35,
+        tone: 82,
+        oiliness: 52,
+        fine_lines: 85,
+        sun_damage: 89
+      },
+      explanations: {
+        hydration: 'Your stratum corneum shows high water retention. Keep using humectants.',
+        texture: 'Epidermis is largely smooth with minor micro-relief changes around cheeks.',
+        pores: 'Excellent pore refinement. Clear follicular ducts.',
+        tone: 'Even melanin distribution. Minor localized vascular congestion.',
+        oiliness: 'Well-regulated sebum levels across the forehead and cheeks.',
+        fine_lines: 'Dermal elasticity is optimal. Trace fine lines under lower eyelids.',
+        sun_damage: 'Minimal UV hyperpigmentation detected. Continue sunscreen use.'
+      }
+    },
+    {
+      id: 'scan-2',
+      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      imageUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300',
+      scores: {
+        overall: 78,
+        hydration: 72,
+        texture: 74,
+        pores: 48,
+        tone: 75,
+        oiliness: 68,
+        fine_lines: 79,
+        sun_damage: 82
+      },
+      explanations: {
+        hydration: 'Mild moisture loss in epidermal layers.',
+        texture: 'Mild roughness detected on chin and nasal bridge.',
+        pores: 'Pores are slightly visible on T-zone due to sebum build-up.',
+        tone: 'Mild erythema around cheek area.',
+        oiliness: 'Moderate oil build-up on forehead and nose.',
+        fine_lines: 'Dynamic lines starting to show near corners of eyes.',
+        sun_damage: 'Light UV discoloration visible under polarized light analysis.'
+      }
+    }
+  ];
+
+  // Design Inspector States
+  const [isPreviewActive, setIsPreviewActive] = useState(false);
+  const [previewScreenId, setPreviewScreenId] = useState<number | null>(null);
+  const [previewPanelOpen, setPreviewPanelOpen] = useState(false);
+  const [selectedPastScan, setSelectedPastScan] = useState<Scan | null>(null);
+
+  const profile = isPreviewActive 
+    ? ([1, 2, 3, 4].includes(previewScreenId || 0) ? null : MOCK_PROFILE) 
+    : realProfile;
+  const scans = isPreviewActive ? MOCK_SCANS : realScans;
+  const subscription = isPreviewActive 
+    ? (previewScreenId === 11 ? { status: 'free' } : { status: 'active' })
+    : realSubscription;
+  const currentScan = isPreviewActive 
+    ? (selectedPastScan || MOCK_SCANS[0]) 
+    : (realCurrentScan || (realScans.length > 0 ? realScans[0] : null));
+
+  const totalScans = scans.length;
+  const daysTracking = scans.length > 0 
+    ? Math.max(1, Math.ceil((Date.now() - new Date(scans[scans.length - 1].createdAt).getTime()) / (1000 * 60 * 60 * 24))) 
+    : 0;
+  const avgImprovement = scans.length >= 2 
+    ? scans[0].scores.overall - scans[1].scores.overall 
+    : 0;
+
+  const triggerPreviewScreen = (screenId: number) => {
+    setIsPreviewActive(true);
+    setPreviewScreenId(screenId);
+    setPreviewPanelOpen(false);
+    
+    // Reset all standard interactive modes
+    setIsAnalyzing(false);
+    setPaywallVisible(false);
+    setSelectedPastScan(null);
+    setUseCameraActive(false);
+
+    switch (screenId) {
+      case 1:
+        setOnboardStep('welcome');
+        break;
+      case 2:
+        setOnboardStep('type');
+        break;
+      case 3:
+        setOnboardStep('goals');
+        break;
+      case 4:
+        setOnboardStep('age');
+        break;
+      case 5:
+        setActiveTab('camera');
+        break;
+      case 6:
+        setIsAnalyzing(true);
+        break;
+      case 7:
+        setActiveTab('insights');
+        break;
+      case 8:
+        setActiveTab('products');
+        break;
+      case 9:
+        setActiveTab('journey');
+        break;
+      case 10:
+        setActiveTab('journey');
+        setSelectedPastScan(MOCK_SCANS[0]);
+        break;
+      case 11:
+        setActiveTab('camera');
+        setPaywallVisible(true);
+        break;
+      case 12:
+        setActiveTab('profile');
+        break;
+      default:
+        break;
+    }
+  };
+
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<'camera' | 'insights' | 'journey' | 'products' | 'profile'>('camera');
   
@@ -156,7 +295,6 @@ export default function AppIndex() {
   const [onboardAge, setOnboardAge] = useState('26–35');
   const [onboardSkinType, setOnboardSkinType] = useState<string | null>('combination');
   const [onboardGoals, setOnboardGoals] = useState<string[]>([]);
-  const [selectedPastScan, setSelectedPastScan] = useState<Scan | null>(null);
 
   const handleLogin = async () => {
     if (!loginNameInput.trim()) {
@@ -638,6 +776,94 @@ export default function AppIndex() {
     );
   };
 
+  const renderDesignPreviewPanel = () => {
+    return (
+      <>
+        {/* Floating Toggle Button */}
+        <TouchableOpacity 
+          style={styles.floatingPreviewToggle}
+          onPress={() => setPreviewPanelOpen(prev => !prev)}
+        >
+          <Text style={{ fontSize: 20 }}>✨</Text>
+          <Text style={styles.floatingPreviewToggleText}>Inspect</Text>
+        </TouchableOpacity>
+
+        {/* Panel Modal */}
+        <Modal
+          visible={previewPanelOpen}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setPreviewPanelOpen(false)}
+        >
+          <View style={styles.previewPanelModalOverlay}>
+            <View style={styles.previewPanelModalContent}>
+              <View style={styles.previewPanelHeader}>
+                <Text style={styles.previewPanelTitle}>✨ Screen Inspector</Text>
+                <TouchableOpacity 
+                  style={styles.previewPanelCloseBtn}
+                  onPress={() => setPreviewPanelOpen(false)}
+                >
+                  <Text style={{ fontSize: 16, color: COLORS.textDark, fontWeight: 'bold' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView contentContainerStyle={styles.previewPanelScroll}>
+                <TouchableOpacity 
+                  style={[styles.previewScreenBtn, !isPreviewActive && styles.previewScreenBtnActive]}
+                  onPress={() => {
+                    setIsPreviewActive(false);
+                    setPreviewScreenId(null);
+                    setIsAnalyzing(false);
+                    setPaywallVisible(false);
+                    setSelectedPastScan(null);
+                    setPreviewPanelOpen(false);
+                  }}
+                >
+                  <Text style={[styles.previewScreenBtnText, !isPreviewActive && { color: '#FFF' }]}>
+                    🟢 Live Mode (Interactive)
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.previewSeparator} />
+
+                {[
+                  { id: 1, name: '1. Splash / Welcome' },
+                  { id: 2, name: '2. Onboarding: Skin Type' },
+                  { id: 3, name: '3. Onboarding: Skin Goals' },
+                  { id: 4, name: '4. Onboarding: Age Range' },
+                  { id: 5, name: '5. Camera Capture Viewfinder' },
+                  { id: 6, name: '6. Analysis Loading Spinner' },
+                  { id: 7, name: '7. Insights / Skin Results' },
+                  { id: 8, name: '8. Recommendations / Remedies' },
+                  { id: 9, name: '9. Skin Journey Trend Chart' },
+                  { id: 10, name: '10. Scan Detail Comparison' },
+                  { id: 11, name: '11. Subscription Paywall' },
+                  { id: 12, name: '12. Settings / User Profile' }
+                ].map(screen => {
+                  const isCurrent = isPreviewActive && previewScreenId === screen.id;
+                  return (
+                    <TouchableOpacity
+                      key={screen.id}
+                      style={[styles.previewScreenBtn, isCurrent && styles.previewScreenBtnActive]}
+                      onPress={() => {
+                        triggerPreviewScreen(screen.id);
+                        setPreviewPanelOpen(false);
+                      }}
+                    >
+                      <Text style={[styles.previewScreenBtnText, isCurrent && { color: '#FFF', fontWeight: 'bold' }]}>
+                        {screen.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      </>
+    );
+  };
+
   // Onboarding screens (if profile is null)
   if (!profile) {
     const goalsList = [
@@ -714,6 +940,7 @@ export default function AppIndex() {
               <Text style={styles.splashLinkText}>Already have an account? Sign in</Text>
             </TouchableOpacity>
           </View>
+          {renderDesignPreviewPanel()}
         </SafeAreaView>
       );
     }
@@ -752,6 +979,7 @@ export default function AppIndex() {
               <Text style={styles.splashLinkText}>Back to welcome</Text>
             </TouchableOpacity>
           </View>
+          {renderDesignPreviewPanel()}
         </SafeAreaView>
       );
     }
@@ -802,6 +1030,7 @@ export default function AppIndex() {
               <Text style={styles.primaryButtonText}>Continue</Text>
             </TouchableOpacity>
           </ScrollView>
+          {renderDesignPreviewPanel()}
         </SafeAreaView>
       );
     }
@@ -839,6 +1068,7 @@ export default function AppIndex() {
               <Text style={styles.primaryButtonText}>Continue</Text>
             </TouchableOpacity>
           </ScrollView>
+          {renderDesignPreviewPanel()}
         </SafeAreaView>
       );
     }
@@ -879,6 +1109,7 @@ export default function AppIndex() {
               <Text style={styles.primaryButtonText}>Start my skin journey →</Text>
             </TouchableOpacity>
           </ScrollView>
+          {renderDesignPreviewPanel()}
         </SafeAreaView>
       );
     }
@@ -934,6 +1165,7 @@ export default function AppIndex() {
             Cosmetic assessment only — not a medical diagnosis.
           </Text>
         </View>
+        {renderDesignPreviewPanel()}
       </SafeAreaView>
     );
   }
@@ -1678,6 +1910,7 @@ export default function AppIndex() {
           </TouchableOpacity>
         </View>
       </BlurView>
+      {renderDesignPreviewPanel()}
     </LinearGradient>
   );
 }
@@ -3092,5 +3325,88 @@ const styles = StyleSheet.create({
   },
   authTabActiveText: {
     color: COLORS.roseDark
+  },
+  floatingPreviewToggle: {
+    position: 'absolute',
+    bottom: 90,
+    right: 16,
+    zIndex: 99999,
+    backgroundColor: COLORS.rosePrimary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    shadowColor: COLORS.roseDark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6
+  },
+  floatingPreviewToggleText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    marginLeft: 6,
+    fontSize: 12
+  },
+  previewPanelModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end'
+  },
+  previewPanelModalContent: {
+    backgroundColor: COLORS.bgLight,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 40,
+    maxHeight: '75%'
+  },
+  previewPanelHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.glassBorder
+  },
+  previewPanelTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.textDark
+  },
+  previewPanelCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.greyLight,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  previewPanelScroll: {
+    paddingVertical: 12
+  },
+  previewScreenBtn: {
+    backgroundColor: COLORS.bgCard,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder
+  },
+  previewScreenBtnActive: {
+    backgroundColor: COLORS.rosePrimary,
+    borderColor: COLORS.rosePrimary
+  },
+  previewScreenBtnText: {
+    fontSize: 14,
+    color: COLORS.textDark
+  },
+  previewSeparator: {
+    height: 1,
+    backgroundColor: COLORS.glassBorder,
+    marginVertical: 8
   }
 });
