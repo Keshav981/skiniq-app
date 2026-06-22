@@ -419,38 +419,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       return existingProfile;
     } catch (err: any) {
-      console.error('Login user failed, attempting offline fallback:', err);
-      // If profile is explicitly not found, propagate the error so they can sign up instead
-      if (err.message?.includes('Profile not found')) {
-        throw err;
-      }
-      
-      // Try to check if we can read the profile from AsyncStorage
-      const savedProfile = await AsyncStorage.getItem('@dermaai_profile');
-      if (savedProfile) {
-        try {
-          const parsed = JSON.parse(savedProfile);
-          if (parsed.name.toLowerCase() === name.toLowerCase()) {
-            setProfile(parsed);
-            return parsed;
-          }
-        } catch (jsonErr) {
-          console.warn('Failed to parse saved profile:', jsonErr);
-        }
-      }
-      
-      // Fallback: create a local mock profile so the user can test the app
-      const fallbackId = generateUUIDv4();
-      const mockProfile: Profile = {
-        id: fallbackId,
-        name,
-        ageRange: '26–35',
-        skinType: 'combination',
-        skinGoals: ['Brightening', 'Hydration', 'Anti-aging']
-      };
-      setProfile(mockProfile);
-      await AsyncStorage.setItem('@dermaai_profile', JSON.stringify(mockProfile));
-      return mockProfile;
+      console.error('Login user failed:', err);
+      throw err;
     } finally {
       setLoading(false);
     }
