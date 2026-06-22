@@ -12,7 +12,8 @@ import {
   Dimensions,
   Modal,
   Switch,
-  Animated
+  Animated,
+  Platform
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,8 +24,56 @@ import { useApp, Scan, Product, ScanScores, ScanExplanations } from '../context/
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// Helper to compress image on web using canvas to avoid OOM crashes
+const compressImageWeb = (uri: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.src = uri;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 800;
+      const MAX_HEIGHT = 800;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        const rawBase64 = dataUrl.split(',')[1];
+        resolve(rawBase64);
+      } else {
+        reject(new Error('Canvas context failed'));
+      }
+    };
+    img.onerror = (err) => reject(err);
+  });
+};
+
 // Helper to convert URI (like blob or local file) to base64
 const getBase64FromUri = async (uri: string): Promise<string> => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+    try {
+      return await compressImageWeb(uri);
+    } catch (err) {
+      console.warn('Canvas compression failed, falling back to raw reader:', err);
+    }
+  }
+
   const response = await fetch(uri);
   const blob = await response.blob();
   return new Promise((resolve, reject) => {
@@ -123,7 +172,7 @@ export default function AppIndex() {
   // Camera & Photo uploads
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [useCameraActive, setUseCameraActive] = useState(false);
-  const [savePhotosConsent, setSavePhotosConsent] = useState(true);
+  const [savePhotosConsent, setSavePhotosConsent] = useState(false);
   const [cameraGuideModal, setCameraGuideModal] = useState(false);
   const cameraRef = useRef<CameraView>(null);
   const [cameraFacing, setCameraFacing] = useState<'front' | 'back'>('front');
@@ -344,12 +393,14 @@ export default function AppIndex() {
       });
       if (photo) {
         let base64Data = photo.base64;
-        if (!base64Data && photo.uri) {
+        if (Platform.OS === 'web' && photo.uri) {
+          base64Data = await getBase64FromUri(photo.uri);
+        } else if (!base64Data && photo.uri) {
           base64Data = await getBase64FromUri(photo.uri);
         }
         if (base64Data) {
           setUseCameraActive(false);
-          setAnalyzingPhotoUri(base64Data.startsWith('data:image/') ? base64Data : `data:image/jpeg;base64,${base64Data}`);
+          setAnalyzingPhotoUri(photo.uri);
           await uploadAndAnalyze(base64Data, isFront);
         } else {
           throw new Error('No picture data retrieved.');
@@ -379,14 +430,18 @@ export default function AppIndex() {
 
       if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets[0]) {
         let base64Img = pickerResult.assets[0].base64;
-        if (!base64Img && pickerResult.assets[0].uri) {
+        if (Platform.OS === 'web' && pickerResult.assets[0].uri) {
+          setAnalysisProgressMsg('Reading photo file...');
+          setIsAnalyzing(true);
+          base64Img = await getBase64FromUri(pickerResult.assets[0].uri);
+        } else if (!base64Img && pickerResult.assets[0].uri) {
           setAnalysisProgressMsg('Reading photo file...');
           setIsAnalyzing(true);
           base64Img = await getBase64FromUri(pickerResult.assets[0].uri);
         }
         if (base64Img) {
           setAnalyzingPhotoIsFront(false);
-          setAnalyzingPhotoUri(base64Img.startsWith('data:image/') ? base64Img : `data:image/jpeg;base64,${base64Img}`);
+          setAnalyzingPhotoUri(pickerResult.assets[0].uri);
           await uploadAndAnalyze(base64Img, false);
         } else {
           Alert.alert('Gallery Error', 'Selected file has no image data.');
