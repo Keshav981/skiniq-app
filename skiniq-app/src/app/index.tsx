@@ -212,15 +212,15 @@ export default function AppIndex() {
   const [selectedPastScan, setSelectedPastScan] = useState<Scan | null>(null);
 
   const profile = isPreviewActive 
-    ? ([1, 2, 3, 4, 5].includes(previewScreenId || 0) ? null : MOCK_PROFILE) 
+    ? ([1, 2, 3, 4].includes(previewScreenId || 0) ? null : MOCK_PROFILE) 
     : realProfile;
-  const scans = isPreviewActive ? MOCK_SCANS : (realScans.length > 0 ? realScans : MOCK_SCANS);
+  const scans = isPreviewActive ? MOCK_SCANS : realScans;
   const subscription = isPreviewActive 
     ? (previewScreenId === 11 ? { status: 'free' } : { status: 'active' })
     : realSubscription;
   const currentScan = isPreviewActive 
     ? (selectedPastScan || MOCK_SCANS[0]) 
-    : (realCurrentScan || (realScans.length > 0 ? realScans[0] : (scans.length > 0 ? scans[0] : null)));
+    : (realCurrentScan || (realScans.length > 0 ? realScans[0] : null));
 
   const totalScans = scans.length;
   const daysTracking = scans.length > 0 
@@ -348,41 +348,38 @@ export default function AppIndex() {
         setOnboardStep('welcome');
         break;
       case 2:
-        setOnboardStep('signup_name');
-        break;
-      case 3:
         setOnboardStep('type');
         break;
-      case 4:
+      case 3:
         setOnboardStep('goals');
         break;
-      case 5:
+      case 4:
         setOnboardStep('age');
         break;
-      case 6:
+      case 5:
         setActiveTab('camera');
         break;
-      case 7:
+      case 6:
         setIsAnalyzing(true);
         break;
-      case 8:
+      case 7:
         setActiveTab('insights');
         break;
-      case 9:
+      case 8:
         setActiveTab('products');
+        break;
+      case 9:
+        setActiveTab('journey');
         break;
       case 10:
         setActiveTab('journey');
-        break;
-      case 11:
-        setActiveTab('journey');
         setSelectedPastScan(MOCK_SCANS[0]);
         break;
-      case 12:
+      case 11:
         setActiveTab('camera');
         setPaywallVisible(true);
         break;
-      case 13:
+      case 12:
         setActiveTab('profile');
         break;
       default:
@@ -394,7 +391,7 @@ export default function AppIndex() {
   const [activeTab, setActiveTab] = useState<'camera' | 'insights' | 'journey' | 'products' | 'profile'>('camera');
   
   // Onboarding & Login states
-  const [onboardStep, setOnboardStep] = useState<'welcome' | 'signin' | 'signup_name' | 'type' | 'goals' | 'age'>('welcome');
+  const [onboardStep, setOnboardStep] = useState<'welcome' | 'signin' | 'type' | 'goals' | 'age'>('welcome');
   const [loginNameInput, setLoginNameInput] = useState('');
   const [onboardName, setOnboardName] = useState('');
   const [onboardAge, setOnboardAge] = useState('26–35');
@@ -1070,18 +1067,17 @@ export default function AppIndex() {
 
                   {[
                     { id: 1, name: '1. Splash / Welcome' },
-                    { id: 2, name: '2. Login/Register: Name' },
-                    { id: 3, name: '3. Onboarding: Skin Type' },
-                    { id: 4, name: '4. Onboarding: Skin Goals' },
-                    { id: 5, name: '5. Onboarding: Age Range' },
-                    { id: 6, name: '6. Camera Capture Viewfinder' },
-                    { id: 7, name: '7. Analysis Loading Spinner' },
-                    { id: 8, name: '8. Insights / Skin Results' },
-                    { id: 9, name: '9. Recommendations / Remedies' },
-                    { id: 10, name: '10. Skin Journey Trend Chart' },
-                    { id: 11, name: '11. Scan Detail Comparison' },
-                    { id: 12, name: '12. Subscription Paywall' },
-                    { id: 13, name: '13. Settings / User Profile' }
+                    { id: 2, name: '2. Onboarding: Skin Type' },
+                    { id: 3, name: '3. Onboarding: Skin Goals' },
+                    { id: 4, name: '4. Onboarding: Age Range' },
+                    { id: 5, name: '5. Camera Capture Viewfinder' },
+                    { id: 6, name: '6. Analysis Loading Spinner' },
+                    { id: 7, name: '7. Insights / Skin Results' },
+                    { id: 8, name: '8. Recommendations / Remedies' },
+                    { id: 9, name: '9. Skin Journey Trend Chart' },
+                    { id: 10, name: '10. Scan Detail Comparison' },
+                    { id: 11, name: '11. Subscription Paywall' },
+                    { id: 12, name: '12. Settings / User Profile' }
                   ].map(screen => {
                     const isCurrent = isPreviewActive && previewScreenId === screen.id;
                     return (
@@ -1152,33 +1148,6 @@ export default function AppIndex() {
             
             <Text style={styles.splashTagline}>Know your skin. Transform it.</Text>
             
-            <TouchableOpacity 
-              style={[styles.splashCTA, { backgroundColor: COLORS.rosePrimary, marginTop: 40 }]} 
-              onPress={() => setOnboardStep('signup_name')}
-            >
-              <Text style={styles.splashCTAText}>Get Started</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.splashLink} 
-              onPress={() => setOnboardStep('signin')}
-            >
-              <Text style={styles.splashLinkText}>Already have an account? Sign in</Text>
-            </TouchableOpacity>
-          </View>
-          {renderDesignPreviewPanel()}
-        </SafeAreaView>
-      );
-    }
-
-    // Screen 2: signup_name (New User Enter Name)
-    if (onboardStep === 'signup_name') {
-      return (
-        <SafeAreaView style={[styles.onboardContainer, { backgroundColor: COLORS.bgLight }]}>
-          <View style={styles.splashContent}>
-            <Text style={styles.onboardHeading}>Create Account</Text>
-            <Text style={styles.onboardSubheading}>First, tell us your name to begin your skincare analysis.</Text>
-            
             <View style={styles.splashInputWrapper}>
               <Text style={styles.splashInputLabel}>What should we call you?</Text>
               <TextInput
@@ -1201,14 +1170,14 @@ export default function AppIndex() {
                 setOnboardStep('type');
               }}
             >
-              <Text style={styles.splashCTAText}>Continue</Text>
+              <Text style={styles.splashCTAText}>Get Started</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
               style={styles.splashLink} 
-              onPress={() => setOnboardStep('welcome')}
+              onPress={() => setOnboardStep('signin')}
             >
-              <Text style={styles.splashLinkText}>Back to welcome</Text>
+              <Text style={styles.splashLinkText}>Already have an account? Sign in</Text>
             </TouchableOpacity>
           </View>
           {renderDesignPreviewPanel()}
@@ -1599,13 +1568,6 @@ export default function AppIndex() {
         {/* INSIGHTS TAB (Screen 7) */}
         {activeTab === 'insights' && (
           <View style={styles.tabContentContainer}>
-            {realScans.length === 0 && (
-              <View style={styles.mockDataBanner}>
-                <Text style={styles.mockDataBannerText}>
-                  ✨ Showing sample profile. Tap Scan to analyze your own skin!
-                </Text>
-              </View>
-            )}
             {scans.length > 0 && currentScan ? (
               <View>
                 {/* Score Gauge Circle */}
@@ -2176,27 +2138,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'transparent'
-  },
-  mockDataBanner: {
-    backgroundColor: '#FDF0F3',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 83, 126, 0.2)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: 'rgba(212, 83, 126, 0.05)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 1
-  },
-  mockDataBannerText: {
-    color: '#D4537E',
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center'
   },
   onboardContainer: {
     flex: 1,
