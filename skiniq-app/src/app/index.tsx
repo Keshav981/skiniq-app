@@ -230,6 +230,108 @@ export default function AppIndex() {
     ? scans[0].scores.overall - scans[1].scores.overall 
     : 0;
 
+  const FALLBACK_PRODUCTS = [
+    {
+      id: 'prod-1',
+      name: 'Hyaluronic Acid 2% + B5',
+      brand: 'Minimalist',
+      category: 'serum',
+      price_inr: 599,
+      image_url: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=300&h=300&q=80',
+      dimensions: ['hydration'],
+      affiliate_link: 'https://www.amazon.in/dp/B08V89NTCS?tag=skiniq-21'
+    },
+    {
+      id: 'prod-3',
+      name: 'Water Drench Hydrating Gel',
+      brand: 'Dot & Key',
+      category: 'moisturizer',
+      price_inr: 395,
+      image_url: 'https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=300&h=300&q=80',
+      dimensions: ['hydration'],
+      affiliate_link: 'https://www.amazon.in/dp/B08DFW9HNS?tag=skiniq-21'
+    },
+    {
+      id: 'prod-4',
+      name: '10% Niacinamide Face Serum',
+      brand: 'Minimalist',
+      category: 'serum',
+      price_inr: 599,
+      image_url: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=300&h=300&q=80',
+      dimensions: ['texture', 'pores'],
+      affiliate_link: 'https://www.amazon.in/dp/B08FF3VP62?tag=skiniq-21'
+    },
+    {
+      id: 'prod-5',
+      name: 'Niacinamide 10% + Zinc 1%',
+      brand: 'The Ordinary',
+      category: 'serum',
+      price_inr: 600,
+      image_url: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?auto=format&fit=crop&w=300&h=300&q=80',
+      dimensions: ['texture', 'pores', 'oiliness'],
+      affiliate_link: 'https://n/a'
+    },
+    {
+      id: 'prod-7',
+      name: '2% Salicylic Acid Face Serum',
+      brand: 'Minimalist',
+      category: 'serum',
+      price_inr: 549,
+      image_url: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=300&h=300&q=80',
+      dimensions: ['pores', 'oiliness'],
+      affiliate_link: 'https://n/a'
+    },
+    {
+      id: 'prod-10',
+      name: 'Alpha Arbutin 2% + HA',
+      brand: 'Minimalist',
+      category: 'serum',
+      price_inr: 549,
+      image_url: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=300&h=300&q=80',
+      dimensions: ['tone', 'sun_damage'],
+      affiliate_link: 'https://n/a'
+    },
+    {
+      id: 'prod-13',
+      name: '0.3% Retinol + Coenzyme Q10',
+      brand: 'Minimalist',
+      category: 'serum',
+      price_inr: 599,
+      image_url: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=300&h=300&q=80',
+      dimensions: ['fine_lines'],
+      affiliate_link: 'https://n/a'
+    }
+  ];
+
+  const getDisplayProducts = () => {
+    if (recommendedProducts && recommendedProducts.length > 0) {
+      return recommendedProducts;
+    }
+    if (!profile) return [];
+    
+    // Map goals list to dimensions
+    const userGoals = profile.skinGoals || [];
+    const targetDims: string[] = [];
+    if (userGoals.includes('Acne')) targetDims.push('pores', 'oiliness');
+    if (userGoals.includes('Brightening')) targetDims.push('tone', 'sun_damage');
+    if (userGoals.includes('Anti-aging')) targetDims.push('fine_lines');
+    if (userGoals.includes('Hydration')) targetDims.push('hydration');
+    if (userGoals.includes('Even tone')) targetDims.push('tone');
+    if (userGoals.includes('General health')) targetDims.push('texture');
+    
+    if (targetDims.length === 0) {
+      return FALLBACK_PRODUCTS;
+    }
+    
+    const matched = FALLBACK_PRODUCTS.filter(p => 
+      p.dimensions.some(d => targetDims.includes(d))
+    );
+    
+    return matched.length > 0 ? matched : FALLBACK_PRODUCTS;
+  };
+
+  const displayProducts = getDisplayProducts();
+
   const triggerPreviewScreen = (screenId: number) => {
     setIsPreviewActive(true);
     setPreviewScreenId(screenId);
@@ -1596,13 +1698,13 @@ export default function AppIndex() {
 
             {/* Section 1: Products For You */}
             <Text style={styles.sectionHeaderTitle}>Products for you</Text>
-            {recommendedProducts.length > 0 ? (
+            {displayProducts.length > 0 ? (
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.horizontalProductsScroll}
               >
-                {recommendedProducts.map(prod => {
+                {displayProducts.map(prod => {
                   const primaryDim = prod.dimensions[0];
                   const dimMeta = DIMENSION_METADATA[primaryDim as keyof typeof DIMENSION_METADATA];
 
@@ -1636,7 +1738,7 @@ export default function AppIndex() {
               </ScrollView>
             ) : (
               <View style={styles.emptyStateCard}>
-                <Text style={styles.emptyStateText}>Product recommendations populate once you complete a skin scan.</Text>
+                <Text style={styles.emptyStateText}>No products matching your skin type and goals could be loaded.</Text>
               </View>
             )}
 
@@ -1996,13 +2098,7 @@ export default function AppIndex() {
 
           <TouchableOpacity 
             style={[styles.tabButton, activeTab === 'insights' && styles.tabButtonActive]}
-            onPress={() => {
-              if (scans.length === 0) {
-                Alert.alert('No Scan History', 'Perform a skin check scan to unlock insights.');
-                return;
-              }
-              setActiveTab('insights');
-            }}
+            onPress={() => setActiveTab('insights')}
           >
             <Text style={styles.tabBtnIcon}>📊</Text>
             <Text style={[styles.tabBtnText, activeTab === 'insights' && styles.tabBtnTextActive]}>Insights</Text>
@@ -2010,13 +2106,7 @@ export default function AppIndex() {
 
           <TouchableOpacity 
             style={[styles.tabButton, activeTab === 'products' && styles.tabButtonActive]}
-            onPress={() => {
-              if (scans.length === 0) {
-                Alert.alert('No Scan History', 'Perform a scan first to populate recommendations.');
-                return;
-              }
-              setActiveTab('products');
-            }}
+            onPress={() => setActiveTab('products')}
           >
             <Text style={styles.tabBtnIcon}>🧴</Text>
             <Text style={[styles.tabBtnText, activeTab === 'products' && styles.tabBtnTextActive]}>Recommend</Text>
@@ -2024,13 +2114,7 @@ export default function AppIndex() {
 
           <TouchableOpacity 
             style={[styles.tabButton, activeTab === 'journey' && styles.tabButtonActive]}
-            onPress={() => {
-              if (scans.length === 0) {
-                Alert.alert('No Scan History', 'Perform a skin check scan to unlock history charts.');
-                return;
-              }
-              setActiveTab('journey');
-            }}
+            onPress={() => setActiveTab('journey')}
           >
             <Text style={styles.tabBtnIcon}>📈</Text>
             <Text style={[styles.tabBtnText, activeTab === 'journey' && styles.tabBtnTextActive]}>History</Text>
